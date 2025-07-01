@@ -1,5 +1,5 @@
 {
-  "name": "BLE Battery Management System (BMS)",
+  "name": "BMS_BLE experimental with discharging toggle (BMS)",
   "filename": "bms_ble.zip",  
   "homeassistant": "2025.2.2",
   "render_readme": true,
