@@ -1,6 +1,6 @@
 {
   "name": "BMS_BLE experimental with discharging toggle (BMS)",
-  "filename": "bms_ble.zip",  
+  "filename": "bms_ble_dx.zip",  
   "homeassistant": "2025.2.2",
   "render_readme": true,
   "zip_release": true
