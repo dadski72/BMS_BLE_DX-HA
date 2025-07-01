@@ -21,6 +21,7 @@ _RESULT_DEFS: Final[BMSsample] = {
     "delta_voltage": 0.01,
     "power": -38.108,
     "battery_charging": False,
+    "battery_discharging_state": True,
     "battery_level": 65,
     "cycle_charge": 68.89,
     "cycle_capacity": 1829.443,

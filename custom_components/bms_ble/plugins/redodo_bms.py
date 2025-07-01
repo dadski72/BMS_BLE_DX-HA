@@ -24,7 +24,22 @@ class BMS(BaseBMS):
         ("cycle_charge", 62, 2, False, lambda x: float(x / 100)),
         ("cycles", 96, 4, False, lambda x: x),
         ("problem_code", 76, 4, False, lambda x: x),
+        (
+            "battery_discharging_state",
+            68,
+            1,
+            False,
+            lambda x: x not in (8, 12),
+        ),
     ]
+
+    # Add discharge control commands
+    _CMD_ENABLE_DISCHARGE: Final[bytes] = bytes([
+        0x00, 0x00, 0x04, 0x01, 0x0C, 0x55, 0xAA, 0x10
+    ])
+    _CMD_DISABLE_DISCHARGE: Final[bytes] = bytes([
+        0x00, 0x00, 0x04, 0x01, 0x0D, 0x55, 0xAA, 0x11
+    ])
 
     def __init__(self, ble_device: BLEDevice, reconnect: bool = False) -> None:
         """Initialize BMS."""
@@ -79,6 +94,7 @@ class BMS(BaseBMS):
         return frozenset(
             {
                 "battery_charging",
+                "battery_discharging_state",
                 "delta_voltage",
                 "cycle_capacity",
                 "power",
@@ -154,3 +170,29 @@ class BMS(BaseBMS):
                 "temp_values": BMS._temp_sensors(self._data, BMS.MAX_TEMP),
             }
         )
+
+    async def enable_discharge(self) -> bool:
+        """Enable battery discharge."""
+        try:
+            await self._connect()
+            await self._await_reply(
+                self._CMD_ENABLE_DISCHARGE, wait_for_notify=False
+            )
+            self._log.debug("Discharge enabled successfully")
+            return True
+        except Exception as err:
+            self._log.error("Failed to enable discharge: %s", err)
+            return False
+
+    async def disable_discharge(self) -> bool:
+        """Disable battery discharge."""
+        try:
+            await self._connect()
+            await self._await_reply(
+                self._CMD_DISABLE_DISCHARGE, wait_for_notify=False
+            )
+            self._log.debug("Discharge disabled successfully")
+            return True
+        except Exception as err:
+            self._log.error("Failed to disable discharge: %s", err)
+            return False

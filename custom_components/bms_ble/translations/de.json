@@ -27,6 +27,11 @@
     }
   },
   "entity": {
+    "binary_sensor": {
+      "battery_discharging_state": {
+        "name": "Batterie entlädt"
+      }
+    },
     "sensor": {
       "cycles": {
         "name": "Zyklen"
@@ -39,6 +44,11 @@
       },
       "runtime": {
         "name": "Laufzeit"
+      }
+    },
+    "switch": {
+      "discharge_control": {
+        "name": "Entladekontrolle"
       }
     }
   }

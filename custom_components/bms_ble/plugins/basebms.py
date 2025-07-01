@@ -20,6 +20,7 @@ from homeassistant.loader import BluetoothMatcherOptional
 
 type BMSvalue = Literal[
     "battery_charging",
+    "battery_discharging_state",
     "battery_mode",
     "battery_level",
     "current",

@@ -17,7 +17,11 @@ from homeassistant.helpers.importlib import async_import_module
 from .const import DOMAIN, LOGGER
 from .coordinator import BTBmsCoordinator
 
-PLATFORMS: list[Platform] = [Platform.BINARY_SENSOR, Platform.SENSOR]
+PLATFORMS: list[Platform] = [
+    Platform.BINARY_SENSOR,
+    Platform.SENSOR,
+    Platform.SWITCH,
+]
 
 type BTBmsConfigEntry = ConfigEntry[BTBmsCoordinator]
 

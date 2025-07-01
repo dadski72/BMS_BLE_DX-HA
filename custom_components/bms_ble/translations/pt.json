@@ -27,6 +27,11 @@
     }
   },
   "entity": {
+    "binary_sensor": {
+      "battery_discharging_state": {
+        "name": "Bateria descarregando"
+      }
+    },
     "sensor": {
       "cycles": {
         "name": "Ciclos"
@@ -39,6 +44,11 @@
       },
       "runtime": {
         "name": "Run"
+      }
+    },
+    "switch": {
+      "discharge_control": {
+        "name": "Controle de descarga"
       }
     }
   }  

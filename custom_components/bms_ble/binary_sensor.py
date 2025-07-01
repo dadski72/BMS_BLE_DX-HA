@@ -15,7 +15,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from . import BTBmsConfigEntry
-from .const import ATTR_PROBLEM, DOMAIN
+from .const import ATTR_PROBLEM, ATTR_BATTERY_DISCHARGING_STATE, DOMAIN
 from .coordinator import BTBmsCoordinator
 
 PARALLEL_UPDATES = 0
@@ -37,6 +37,13 @@ BINARY_SENSOR_TYPES: list[BmsBinaryEntityDescription] = [
             if "battery_mode" in data
             else {}
         ),
+    ),
+    BmsBinaryEntityDescription(
+        key=ATTR_BATTERY_DISCHARGING_STATE,
+        translation_key="battery_discharging_state",
+        device_class=BinarySensorDeviceClass.RUNNING,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        icon="mdi:battery-arrow-down",
     ),
     BmsBinaryEntityDescription(
         key=ATTR_PROBLEM,
