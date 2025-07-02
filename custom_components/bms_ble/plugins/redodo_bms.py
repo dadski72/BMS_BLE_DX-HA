@@ -169,14 +169,14 @@ class BMS(BaseBMS):
         # Log raw data for debugging discharge state
         if len(self._data) > 68:
             discharge_byte = self._data[68]
-            self._log.info("Raw byte at offset 68 (discharge state): 0x%02X (%d)", discharge_byte, discharge_byte)
-            self._log.info("Logic: if value is 8 or 12 → switch OFF, else → switch ON")
+            self._log.warning("Raw byte at offset 68 (discharge state): 0x%02X (%d)", discharge_byte, discharge_byte)
+            self._log.warning("Logic: if value is 0x80 or 12 → switch OFF, else → switch ON")
         
         decoded_data = BMS._decode_data(self._data)
         
         # Log the decoded discharge state
         if "battery_discharging_state" in decoded_data:
-            self._log.info("Decoded battery_discharging_state: %s", decoded_data["battery_discharging_state"])
+            self._log.warning("Decoded battery_discharging_state: %s", decoded_data["battery_discharging_state"])
 
         return decoded_data | BMSsample(
             {
@@ -207,14 +207,14 @@ class BMS(BaseBMS):
     async def disable_discharge(self) -> bool:
         """Disable battery discharge."""
         try:
-            self._log.info("=== DISABLE DISCHARGE COMMAND START ===")
-            self._log.info("Command bytes: %s", self._CMD_DISABLE_DISCHARGE.hex())
+            self._log.warning("=== DISABLE DISCHARGE COMMAND START ===")
+            self._log.warning("Command bytes: %s", self._CMD_DISABLE_DISCHARGE.hex())
             await self._connect()
             await self._await_reply(
                 self._CMD_DISABLE_DISCHARGE, wait_for_notify=False
             )
-            self._log.info("Discharge disabled successfully")
-            self._log.info("=== DISABLE DISCHARGE COMMAND END ===")
+            self._log.warning("Discharge disabled successfully")
+            self._log.warning("=== DISABLE DISCHARGE COMMAND END ===")
             return True
         except Exception as err:
             self._log.error("Failed to disable discharge: %s", err)
