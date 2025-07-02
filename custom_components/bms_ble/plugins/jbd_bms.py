@@ -119,6 +119,14 @@ class BMS(BaseBMS):
         self, _sender: BleakGATTCharacteristic, data: bytearray
     ) -> None:
         # check if answer is a heading of basic info (0x3) or cell block info (0x4)
+        if data.hex(" ") == "dd e1 00 00 00 00 77":
+            self._data = bytearray() 
+            self._data_final = self._data
+            self._data += data
+            self._log.debug("Received discharging on/off notification")
+            self._data_event.set()
+            return
+        
         if (
             data.startswith(self.HEAD_RSP)
             and len(self._data) > self.INFO_LEN
@@ -242,7 +250,7 @@ class BMS(BaseBMS):
             self._log.warning("Command bytes: %s", self._CMD_ENABLE_DISCHARGE.hex())
             await self._connect()
             self._last_discharge_state = True
-            await self._await_reply(self._CMD_ENABLE_DISCHARGE, wait_for_notify=False)
+            await self._await_reply(self._CMD_ENABLE_DISCHARGE, wait_for_notify=True)
             self._log.warning("Discharge enabled successfully")
             self._log.warning("=== JBD ENABLE DISCHARGE COMMAND END ===")
             return True
@@ -257,7 +265,7 @@ class BMS(BaseBMS):
             self._log.warning("Command bytes: %s", self._CMD_DISABLE_DISCHARGE.hex())
             await self._connect()
             self._last_discharge_state = False
-            await self._await_reply(self._CMD_DISABLE_DISCHARGE, wait_for_notify=False)
+            await self._await_reply(self._CMD_DISABLE_DISCHARGE, wait_for_notify=True)
             self._log.warning("Discharge disabled successfully")
             self._log.warning("=== JBD DISABLE DISCHARGE COMMAND END ===")
             return True
