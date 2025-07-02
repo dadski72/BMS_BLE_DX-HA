@@ -204,21 +204,13 @@ class BMS(BaseBMS):
         """Return interpreted battery discharging state for JBD BMS."""
         if len(self._data_final) <= 21:
             return self._last_discharge_state  # Return last known state
-        
-        # JBD BMS: Check protection status byte at offset 20-21 (2 bytes)
-        # Discharge MOS status is typically in bit 1 of the status word
-        protection_status = int.from_bytes(
-            self._data_final[20:22], byteorder="big", signed=False
-        )
-        self._log.warning(
-            "JBD protection status (discharge state): 0x%04X", protection_status
-        )
-        
-        # JBD-specific logic: bit 1 indicates discharge MOS status
-        # 1 = discharge enabled, 0 = discharge disabled
-        current_state = bool(protection_status & 0x0002)
-        self._last_discharge_state = current_state  # Store current state
-        return current_state
+
+        byte20 = int.from_bytes(self._data_final[20])
+        discharge_state = (byte20 & 2) == 2
+        self._log.warning("JBD byte20 status (discharge state): ", discharge_state)
+
+        self._last_discharge_state = discharge_state  # Store current state
+        return discharge_state
 
     async def _async_update(self) -> BMSsample:
         """Update battery status information."""
@@ -239,14 +231,10 @@ class BMS(BaseBMS):
         """Enable battery discharge."""
         try:
             self._log.warning("=== JBD ENABLE DISCHARGE COMMAND START ===")
-            self._log.warning(
-                "Command bytes: %s", self._CMD_ENABLE_DISCHARGE.hex()
-            )
+            self._log.warning("Command bytes: %s", self._CMD_ENABLE_DISCHARGE.hex())
             await self._connect()
             self._last_discharge_state = True
-            await self._await_reply(
-                self._CMD_ENABLE_DISCHARGE, wait_for_notify=False
-            )
+            await self._await_reply(self._CMD_ENABLE_DISCHARGE, wait_for_notify=False)
             self._log.warning("Discharge enabled successfully")
             self._log.warning("=== JBD ENABLE DISCHARGE COMMAND END ===")
             return True
@@ -258,14 +246,10 @@ class BMS(BaseBMS):
         """Disable battery discharge."""
         try:
             self._log.warning("=== JBD DISABLE DISCHARGE COMMAND START ===")
-            self._log.warning(
-                "Command bytes: %s", self._CMD_DISABLE_DISCHARGE.hex()
-            )
+            self._log.warning("Command bytes: %s", self._CMD_DISABLE_DISCHARGE.hex())
             await self._connect()
             self._last_discharge_state = False
-            await self._await_reply(
-                self._CMD_DISABLE_DISCHARGE, wait_for_notify=False
-            )
+            await self._await_reply(self._CMD_DISABLE_DISCHARGE, wait_for_notify=False)
             self._log.warning("Discharge disabled successfully")
             self._log.warning("=== JBD DISABLE DISCHARGE COMMAND END ===")
             return True
