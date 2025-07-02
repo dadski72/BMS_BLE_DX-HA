@@ -130,9 +130,13 @@ class BMS(BaseBMS):
     def _decode_data(data: bytearray) -> BMSsample:
         result: BMSsample = {}
         for key, idx, size, sign, func in BMS._FIELDS:
-            result[key] = func(
-                int.from_bytes(data[idx : idx + size], byteorder="little", signed=sign)
-            )
+            if key == "battery_discharging_state":
+                # Reverse the bytes for this field
+                byte_data = data[idx : idx + size][::-1]
+                value = int.from_bytes(byte_data, byteorder="little", signed=sign)
+            else:
+                value = int.from_bytes(data[idx : idx + size], byteorder="little", signed=sign)
+            result[key] = func(value)
         return result
 
     @staticmethod
@@ -167,7 +171,10 @@ class BMS(BaseBMS):
         # Log raw data for debugging discharge state
         if len(self._data) > 68:
             discharge_byte = self._data[68]
+            discharge_byte_reversed = self._data[68:69][::-1][0]
             self._log.info("Raw byte at offset 68 (discharge state): 0x%02X (%d)", discharge_byte, discharge_byte)
+            self._log.info("Raw byte reversed: 0x%02X (%d)", discharge_byte_reversed, discharge_byte_reversed)
+        
         
         decoded_data = BMS._decode_data(self._data)
         
