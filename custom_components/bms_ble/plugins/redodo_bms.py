@@ -27,12 +27,12 @@ class BMS(BaseBMS):
     ]
 
     # Add discharge control commands
-    _CMD_ENABLE_DISCHARGE: Final[bytes] = bytes([
-        0x00, 0x00, 0x04, 0x01, 0x0C, 0x55, 0xAA, 0x10
-    ])
-    _CMD_DISABLE_DISCHARGE: Final[bytes] = bytes([
-        0x00, 0x00, 0x04, 0x01, 0x0D, 0x55, 0xAA, 0x11
-    ])
+    _CMD_ENABLE_DISCHARGE: Final[bytes] = bytes(
+        [0x00, 0x00, 0x04, 0x01, 0x0C, 0x55, 0xAA, 0x10]
+    )
+    _CMD_DISABLE_DISCHARGE: Final[bytes] = bytes(
+        [0x00, 0x00, 0x04, 0x01, 0x0D, 0x55, 0xAA, 0x11]
+    )
 
     def __init__(self, ble_device: BLEDevice, reconnect: bool = False) -> None:
         """Initialize BMS."""
@@ -123,7 +123,9 @@ class BMS(BaseBMS):
     def _decode_data(data: bytearray) -> BMSsample:
         result: BMSsample = {}
         for key, idx, size, sign, func in BMS._FIELDS:
-            value = int.from_bytes(data[idx : idx + size], byteorder="little", signed=sign)
+            value = int.from_bytes(
+                data[idx : idx + size], byteorder="little", signed=sign
+            )
             result[key] = func(value)
         return result
 
@@ -153,38 +155,29 @@ class BMS(BaseBMS):
         ]
 
     @staticmethod
-    def _battery_discharging_state(data: bytearray) -> bool:
+    def _battery_discharging_state(self) -> bool:
         """Return interpreted battery discharging state for Redodo BMS."""
-        if len(data) <= 68:
+        if len(self._data) <= 68:
             return False
         
-        raw_value = data[68]
+        # Log raw data for debugging discharge state
+        discharge_byte = self._data[68]
+        self._log.warning("Raw byte at offset 68 (discharge state): 0x%02X (%d)", discharge_byte, discharge_byte)
+        
         # Redodo-specific logic: if raw value is 8 or 12, discharge is OFF
-        return raw_value not in (0x80, 12)
+        return discharge_byte not in (0x80, 12)
 
     async def _async_update(self) -> BMSsample:
         """Update battery status information."""
         await self._await_reply(b"\x00\x00\x04\x01\x13\x55\xaa\x17")
 
-        # Log raw data for debugging discharge state
-        if len(self._data) > 68:
-            discharge_byte = self._data[68]
-            self._log.warning("Raw byte at offset 68 (discharge state): 0x%02X (%d)", discharge_byte, discharge_byte)
-            self._log.warning("Logic: if value is 0x80 or 12 → switch OFF, else → switch ON")
-        
         decoded_data = BMS._decode_data(self._data)
-        
-        # Log the decoded discharge state
-        if "battery_discharging_state" in decoded_data:
-            self._log.warning("Decoded battery_discharging_state: %s", decoded_data["battery_discharging_state"])
 
         return decoded_data | BMSsample(
             {
                 "cell_voltages": BMS._cell_voltages(self._data, BMS.MAX_CELLS),
                 "temp_values": BMS._temp_sensors(self._data, BMS.MAX_TEMP),
-                "battery_discharging_state": BMS._battery_discharging_state(
-                    self._data
-                ),
+                "battery_discharging_state": BMS._battery_discharging_state(self),
             }
         )
 
@@ -194,9 +187,7 @@ class BMS(BaseBMS):
             self._log.info("=== ENABLE DISCHARGE COMMAND START ===")
             self._log.info("Command bytes: %s", self._CMD_ENABLE_DISCHARGE.hex())
             await self._connect()
-            await self._await_reply(
-                self._CMD_ENABLE_DISCHARGE, wait_for_notify=False
-            )
+            await self._await_reply(self._CMD_ENABLE_DISCHARGE, wait_for_notify=False)
             self._log.info("Discharge enabled successfully")
             self._log.info("=== ENABLE DISCHARGE COMMAND END ===")
             return True
@@ -210,9 +201,7 @@ class BMS(BaseBMS):
             self._log.warning("=== DISABLE DISCHARGE COMMAND START ===")
             self._log.warning("Command bytes: %s", self._CMD_DISABLE_DISCHARGE.hex())
             await self._connect()
-            await self._await_reply(
-                self._CMD_DISABLE_DISCHARGE, wait_for_notify=False
-            )
+            await self._await_reply(self._CMD_DISABLE_DISCHARGE, wait_for_notify=False)
             self._log.warning("Discharge disabled successfully")
             self._log.warning("=== DISABLE DISCHARGE COMMAND END ===")
             return True
