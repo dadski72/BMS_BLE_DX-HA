@@ -207,7 +207,8 @@ class BMS(BaseBMS):
 
         discharge_byte = self._data_final[20]  # Get the byte directly
         current_state = (discharge_byte & 2) == 2
-        self._log.warning(f"discharge state:{current_state}  byte20:{discharge_byte}")
+        self._log.warning(f"discharge state:{current_state}  discharge_byte:{discharge_byte}")
+        self._log.warning(f"bytes received:{self._data_final.tohex()}")
 
         self._last_discharge_state = current_state  # Store current state
         return current_state
