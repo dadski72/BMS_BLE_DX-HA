@@ -11,7 +11,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from . import BTBmsConfigEntry
-from .const import DOMAIN
+from .const import DOMAIN, LOGGER
 from .coordinator import BTBmsCoordinator
 
 
@@ -23,13 +23,22 @@ async def async_setup_entry(
     """Set up switch platform."""
     coordinator = config_entry.runtime_data
     
-    # Only add discharge switch for Redodo BMS
-    if "redodo" in coordinator.bms.__class__.__module__.lower():
+    LOGGER.debug("Setting up switch platform for BMS: %s", 
+                 coordinator.bms.__class__.__module__)
+    
+    # Add discharge switch for any BMS that has discharge control methods
+    if (hasattr(coordinator.bms, "enable_discharge") and 
+        hasattr(coordinator.bms, "disable_discharge")):
+        LOGGER.debug("Adding discharge control switch for BMS: %s", 
+                     coordinator.bms.__class__.__name__)
         async_add_entities([
             BTBmsDischargeSwitch(
                 coordinator, format_mac(config_entry.unique_id)
             )
         ])
+    else:
+        LOGGER.debug("BMS %s does not support discharge control", 
+                     coordinator.bms.__class__.__name__)
 
 
 class BTBmsDischargeSwitch(CoordinatorEntity[BTBmsCoordinator], SwitchEntity):

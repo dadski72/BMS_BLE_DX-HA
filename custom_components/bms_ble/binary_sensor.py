@@ -41,8 +41,7 @@ BINARY_SENSOR_TYPES: list[BmsBinaryEntityDescription] = [
     BmsBinaryEntityDescription(
         key=ATTR_BATTERY_DISCHARGING_STATE,
         translation_key="battery_discharging_state",
-        device_class=BinarySensorDeviceClass.RUNNING,
-        entity_category=EntityCategory.DIAGNOSTIC,
+        # Remove device_class to show On/Off instead of Running/Not Running
         icon="mdi:battery-arrow-down",
     ),
     BmsBinaryEntityDescription(

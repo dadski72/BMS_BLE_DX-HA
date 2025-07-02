@@ -29,7 +29,11 @@
   "entity": {
     "binary_sensor": {
       "battery_discharging_state": {
-        "name": "Battery discharging"
+        "name": "Battery discharging",
+        "state": {
+          "on": "Discharging",
+          "off": "Not discharging"
+        }
       }
     },
     "sensor": {
