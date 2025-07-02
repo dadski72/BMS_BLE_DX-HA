@@ -176,7 +176,6 @@ class BMS(BaseBMS):
             # self._log.info("aAfter Raw byte at offset 68 (discharge state): 0x%02X (%d)", discharge_byte, discharge_byte)
             # self._log.info("aAfter Raw byte reversed: 0x%02X (%d)", discharge_byte_reversed, discharge_byte_reversed)
         
-        
         decoded_data = BMS._decode_data(self._data)
         
         # Log the decoded discharge state
