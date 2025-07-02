@@ -120,13 +120,13 @@ class BMS(BaseBMS):
     ) -> None:
         # check if answer is a heading of basic info (0x3) or cell block info (0x4)
         if data.hex(" ") == "dd e1 00 00 00 00 77":
-            self._data = bytearray() 
+            self._data = bytearray()
             self._data += data
             self._data_final = self._data
             self._log.debug("Received discharging on/off notification")
             self._data_event.set()
             return
-        
+
         if (
             data.startswith(self.HEAD_RSP)
             and len(self._data) > self.INFO_LEN
@@ -215,17 +215,17 @@ class BMS(BaseBMS):
 
         hex_bytes = " ".join(f"0x{b:02x}" for b in self._data_final)
         self._log.warning("bytes received:%s", hex_bytes)
-  
+
         discharge_byte = self._data_final[4 + 20]  # Get the byte directly
         current_state = (discharge_byte & 2) == 2
+        self._last_discharge_state = current_state  # Store current state
+
         self._log.warning(
             "discharge state:%s  discharge_byte:%s",
             current_state,
             discharge_byte,
         )
-  
 
-        self._last_discharge_state = current_state  # Store current state
         return current_state
 
     async def _async_update(self) -> BMSsample:
