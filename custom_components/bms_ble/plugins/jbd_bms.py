@@ -205,9 +205,11 @@ class BMS(BaseBMS):
         if len(self._data_final) <= 21:
             return self._last_discharge_state  # Return last known state
 
-        byte20 = int.from_bytes(self._data_final[20])
+        byte20 = self._data_final[20]  # Get the byte directly
         discharge_state = (byte20 & 2) == 2
-        self._log.warning("JBD byte20 status (discharge state): ", discharge_state)
+        self._log.warning(
+            "JBD byte20 status (discharge state): %s", discharge_state
+        )
 
         self._last_discharge_state = discharge_state  # Store current state
         return discharge_state
