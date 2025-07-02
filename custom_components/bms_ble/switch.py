@@ -23,23 +23,23 @@ async def async_setup_entry(
     """Set up switch platform."""
     coordinator = config_entry.runtime_data
     
-    LOGGER.warning("=== SWITCH PLATFORM SETUP START ===")
-    LOGGER.warning("BMS class: %s", coordinator.bms.__class__.__name__)
-    LOGGER.warning("BMS module: %s", coordinator.bms.__class__.__module__)
+    LOGGER.warning("=== SWITCH PLATFORM SETUP START V2 ===")
+    LOGGER.warning("BMS class: %s", coordinator._device.__class__.__name__)
+    LOGGER.warning("BMS module: %s", coordinator._device.__class__.__module__)
     
     # List all methods of the BMS object
-    bms_methods = [method for method in dir(coordinator.bms) if not method.startswith('_')]
+    bms_methods = [method for method in dir(coordinator._device) if not method.startswith('_')]
     LOGGER.warning("BMS methods: %s", bms_methods)
     
     # Check if BMS has discharge methods
-    has_enable = hasattr(coordinator.bms, "enable_discharge")
-    has_disable = hasattr(coordinator.bms, "disable_discharge")
+    has_enable = hasattr(coordinator._device, "enable_discharge")
+    has_disable = hasattr(coordinator._device, "disable_discharge")
     
     LOGGER.warning("BMS has enable_discharge: %s", has_enable)
     LOGGER.warning("BMS has disable_discharge: %s", has_disable)
     
     # Force create switch for Redodo BMS regardless
-    if "redodo" in coordinator.bms.__class__.__module__.lower() or has_enable:
+    if "redodo" in coordinator._device.__class__.__module__.lower() or has_enable:
         LOGGER.warning("CREATING DISCHARGE SWITCH!")
         switch = BTBmsDischargeSwitch(
             coordinator, format_mac(config_entry.unique_id)
@@ -79,15 +79,15 @@ class BTBmsDischargeSwitch(CoordinatorEntity[BTBmsCoordinator], SwitchEntity):
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn on discharge."""
-        if hasattr(self.coordinator.bms, "enable_discharge"):
-            success = await self.coordinator.bms.enable_discharge()
+        if hasattr(self.coordinator._device, "enable_discharge"):
+            success = await self.coordinator._device.enable_discharge()
             if success:
                 await self.coordinator.async_request_refresh()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn off discharge."""
-        if hasattr(self.coordinator.bms, "disable_discharge"):
-            success = await self.coordinator.bms.disable_discharge()
+        if hasattr(self.coordinator._device, "disable_discharge"):
+            success = await self.coordinator._device.disable_discharge()
             if success:
                 await self.coordinator.async_request_refresh()
 
@@ -96,6 +96,6 @@ class BTBmsDischargeSwitch(CoordinatorEntity[BTBmsCoordinator], SwitchEntity):
         """Return if entity is available."""
         return (
             super().available
-            and hasattr(self.coordinator.bms, "enable_discharge")
-            and hasattr(self.coordinator.bms, "disable_discharge")
+            and hasattr(self.coordinator._device, "enable_discharge")
+            and hasattr(self.coordinator._device, "disable_discharge")
         )
