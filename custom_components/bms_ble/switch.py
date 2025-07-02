@@ -78,13 +78,17 @@ class BTBmsDischargeSwitch(CoordinatorEntity[BTBmsCoordinator], SwitchEntity):
             return None
         
         # Get the raw value and log it
-        raw_value = self.coordinator.data.get("battery_discharging_state", False)
-        LOGGER.info("Switch is_on: battery_discharging_state = %s (type: %s)", raw_value, type(raw_value))
+        raw_value = self.coordinator.data.get("battery_discharging_state", 0)
+        LOGGER.info("Switch is_on: battery_discharging_state raw = %s (type: %s)", raw_value, type(raw_value))
+        
+        # Apply the logic: if raw value is 8 or 12, discharge is OFF, else it's ON
+        is_discharge_enabled = raw_value not in (8, 12)
+        LOGGER.info("Switch is_on: interpreted state = %s (raw %s not in [8,12])", is_discharge_enabled, raw_value)
         
         # Also log all coordinator data for debugging
         LOGGER.debug("All coordinator data: %s", self.coordinator.data)
         
-        return raw_value
+        return is_discharge_enabled
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn on discharge."""
