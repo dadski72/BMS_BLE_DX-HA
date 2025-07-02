@@ -121,8 +121,8 @@ class BMS(BaseBMS):
         # check if answer is a heading of basic info (0x3) or cell block info (0x4)
         if data.hex(" ") == "dd e1 00 00 00 00 77":
             self._data = bytearray() 
-            self._data_final = self._data
             self._data += data
+            self._data_final = self._data
             self._log.debug("Received discharging on/off notification")
             self._data_event.set()
             return
