@@ -48,10 +48,10 @@ class BTBmsDischargeSwitch(CoordinatorEntity[BTBmsCoordinator], SwitchEntity):
         self, coordinator: BTBmsCoordinator, unique_id: str
     ) -> None:
         """Initialize the switch."""
-        self._attr_unique_id = f"{DOMAIN}-{unique_id}-discharge_control"
+        self._attr_unique_id = f"{DOMAIN}-{unique_id}-battery_discharging"
         self._attr_device_info = coordinator.device_info
         self._attr_has_entity_name = True
-        self._attr_name = "Discharge Control"
+        self._attr_name = "Battery discharging"
         self._attr_icon = "mdi:battery-arrow-down"
         super().__init__(coordinator)
 
