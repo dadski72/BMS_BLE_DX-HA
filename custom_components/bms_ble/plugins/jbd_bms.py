@@ -28,10 +28,19 @@ class BMS(BaseBMS):
         ("problem_code", 20, 2, False, lambda x: x),
     ]  # general protocol v4
 
+    # Add discharge control commands
+    _CMD_ENABLE_DISCHARGE: Final[bytes] = bytes(
+        [0xDD, 0x5A, 0xE1, 0x02, 0x00, 0x00, 0xFF, 0x1D, 0x77]
+    )
+    _CMD_DISABLE_DISCHARGE: Final[bytes] = bytes(
+        [0xDD, 0x5A, 0xE1, 0x02, 0x00, 0x02, 0xFF, 0x1B, 0x77]
+    )
+
     def __init__(self, ble_device: BLEDevice, reconnect: bool = False) -> None:
         """Intialize private BMS members."""
         super().__init__(__name__, ble_device, reconnect)
         self._data_final: bytearray = bytearray()
+        self._last_discharge_state: bool = False
 
     @staticmethod
     def matcher_dict_list() -> list[AdvertisementPattern]:
@@ -98,6 +107,7 @@ class BMS(BaseBMS):
             {
                 "power",
                 "battery_charging",
+                "battery_discharging_state",
                 "cycle_capacity",
                 "runtime",
                 "delta_voltage",
@@ -190,6 +200,26 @@ class BMS(BaseBMS):
             for idx in range(27, 27 + sensors * 2, 2)
         ]
 
+    def _battery_discharging_state(self) -> bool:
+        """Return interpreted battery discharging state for JBD BMS."""
+        if len(self._data_final) <= 21:
+            return self._last_discharge_state  # Return last known state
+        
+        # JBD BMS: Check protection status byte at offset 20-21 (2 bytes)
+        # Discharge MOS status is typically in bit 1 of the status word
+        protection_status = int.from_bytes(
+            self._data_final[20:22], byteorder="big", signed=False
+        )
+        self._log.warning(
+            "JBD protection status (discharge state): 0x%04X", protection_status
+        )
+        
+        # JBD-specific logic: bit 1 indicates discharge MOS status
+        # 1 = discharge enabled, 0 = discharge disabled
+        current_state = bool(protection_status & 0x0002)
+        self._last_discharge_state = current_state  # Store current state
+        return current_state
+
     async def _async_update(self) -> BMSsample:
         """Update battery status information."""
         data: BMSsample = {}
@@ -198,8 +228,47 @@ class BMS(BaseBMS):
         data["temp_values"] = BMS._temp_sensors(
             self._data_final, int(data.get("temp_sensors", 0))
         )
+        data["battery_discharging_state"] = self._battery_discharging_state()
 
         await self._await_reply(BMS._cmd(b"\x04"))
         data["cell_voltages"] = BMS._cell_voltages(self._data_final)
 
         return data
+
+    async def enable_discharge(self) -> bool:
+        """Enable battery discharge."""
+        try:
+            self._log.warning("=== JBD ENABLE DISCHARGE COMMAND START ===")
+            self._log.warning(
+                "Command bytes: %s", self._CMD_ENABLE_DISCHARGE.hex()
+            )
+            await self._connect()
+            self._last_discharge_state = True
+            await self._await_reply(
+                self._CMD_ENABLE_DISCHARGE, wait_for_notify=False
+            )
+            self._log.warning("Discharge enabled successfully")
+            self._log.warning("=== JBD ENABLE DISCHARGE COMMAND END ===")
+            return True
+        except Exception as err:
+            self._log.error("Failed to enable discharge: %s", err)
+            return False
+
+    async def disable_discharge(self) -> bool:
+        """Disable battery discharge."""
+        try:
+            self._log.warning("=== JBD DISABLE DISCHARGE COMMAND START ===")
+            self._log.warning(
+                "Command bytes: %s", self._CMD_DISABLE_DISCHARGE.hex()
+            )
+            await self._connect()
+            self._last_discharge_state = False
+            await self._await_reply(
+                self._CMD_DISABLE_DISCHARGE, wait_for_notify=False
+            )
+            self._log.warning("Discharge disabled successfully")
+            self._log.warning("=== JBD DISABLE DISCHARGE COMMAND END ===")
+            return True
+        except Exception as err:
+            self._log.error("Failed to disable discharge: %s", err)
+            return False
