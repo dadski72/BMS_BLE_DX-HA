@@ -212,7 +212,8 @@ class BMS(BaseBMS):
             current_state,
             discharge_byte,
         )
-        self._log.warning("bytes received:%s", self._data_final.hex())
+        hex_bytes = " ".join(f"0x{b:02x}" for b in self._data_final)
+        self._log.warning("bytes received:%s", hex_bytes)
 
         self._last_discharge_state = current_state  # Store current state
         return current_state
