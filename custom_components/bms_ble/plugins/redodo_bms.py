@@ -24,13 +24,6 @@ class BMS(BaseBMS):
         ("cycle_charge", 62, 2, False, lambda x: float(x / 100)),
         ("cycles", 96, 4, False, lambda x: x),
         ("problem_code", 76, 4, False, lambda x: x),
-        (
-            "battery_discharging_state",
-            68,
-            1,
-            False,
-            lambda x: x,
-        ),
     ]
 
     # Add discharge control commands
@@ -132,13 +125,6 @@ class BMS(BaseBMS):
         for key, idx, size, sign, func in BMS._FIELDS:
             value = int.from_bytes(data[idx : idx + size], byteorder="little", signed=sign)
             result[key] = func(value)
-        
-        # Redodo-specific logic: convert raw discharge state to boolean
-        if "battery_discharging_state" in result:
-            raw_value = result["battery_discharging_state"]
-            # If raw value is 8 or 12, discharge is OFF, else it's ON
-            result["battery_discharging_state"] = raw_value not in (80, 120)
-        
         return result
 
     @staticmethod
@@ -166,6 +152,16 @@ class BMS(BaseBMS):
             )
         ]
 
+    @staticmethod
+    def _battery_discharging_state(data: bytearray) -> bool:
+        """Return interpreted battery discharging state for Redodo BMS."""
+        if len(data) <= 68:
+            return False
+        
+        raw_value = data[68]
+        # Redodo-specific logic: if raw value is 8 or 12, discharge is OFF
+        return raw_value not in (0x80, 12)
+
     async def _async_update(self) -> BMSsample:
         """Update battery status information."""
         await self._await_reply(b"\x00\x00\x04\x01\x13\x55\xaa\x17")
@@ -186,6 +182,9 @@ class BMS(BaseBMS):
             {
                 "cell_voltages": BMS._cell_voltages(self._data, BMS.MAX_CELLS),
                 "temp_values": BMS._temp_sensors(self._data, BMS.MAX_TEMP),
+                "battery_discharging_state": BMS._battery_discharging_state(
+                    self._data
+                ),
             }
         )
 
