@@ -74,22 +74,55 @@ class BTBmsDischargeSwitch(CoordinatorEntity[BTBmsCoordinator], SwitchEntity):
     def is_on(self) -> bool | None:
         """Return true if discharge is enabled."""
         if self.coordinator.data is None:
+            LOGGER.debug("Switch is_on: coordinator.data is None")
             return None
-        return self.coordinator.data.get("battery_discharging_state", False)
+        
+        # Get the raw value and log it
+        raw_value = self.coordinator.data.get("battery_discharging_state", False)
+        LOGGER.info("Switch is_on: battery_discharging_state = %s (type: %s)", raw_value, type(raw_value))
+        
+        # Also log all coordinator data for debugging
+        LOGGER.debug("All coordinator data: %s", self.coordinator.data)
+        
+        return raw_value
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn on discharge."""
+        LOGGER.info("Switch async_turn_on called")
         if hasattr(self.coordinator._device, "enable_discharge"):
+            LOGGER.info("Calling enable_discharge() on BMS")
             success = await self.coordinator._device.enable_discharge()
+            LOGGER.info("enable_discharge() returned: %s", success)
             if success:
+                LOGGER.info("Success! Requesting coordinator refresh")
                 await self.coordinator.async_request_refresh()
+                # Log the state after refresh
+                if self.coordinator.data:
+                    new_state = self.coordinator.data.get("battery_discharging_state", False)
+                    LOGGER.info("After refresh, battery_discharging_state = %s", new_state)
+            else:
+                LOGGER.warning("enable_discharge() failed!")
+        else:
+            LOGGER.error("BMS does not have enable_discharge method!")
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn off discharge."""
+        LOGGER.info("Switch async_turn_off called")
         if hasattr(self.coordinator._device, "disable_discharge"):
+            LOGGER.info("Calling disable_discharge() on BMS")
             success = await self.coordinator._device.disable_discharge()
+            LOGGER.info("disable_discharge() returned: %s", success)
             if success:
+                LOGGER.info("Success! Requesting coordinator refresh")
                 await self.coordinator.async_request_refresh()
+                # Log the state after refresh
+                if self.coordinator.data:
+                    new_state = self.coordinator.data.get("battery_discharging_state", False)
+                    LOGGER.info("After refresh, battery_discharging_state = %s", new_state)
+            else:
+                LOGGER.warning("disable_discharge() failed!")
+        else:
+            LOGGER.error("BMS does not have disable_discharge method!")
 
     @property
     def available(self) -> bool:

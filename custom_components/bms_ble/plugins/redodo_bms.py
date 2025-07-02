@@ -164,7 +164,18 @@ class BMS(BaseBMS):
         """Update battery status information."""
         await self._await_reply(b"\x00\x00\x04\x01\x13\x55\xaa\x17")
 
-        return BMS._decode_data(self._data) | BMSsample(
+        # Log raw data for debugging discharge state
+        if len(self._data) > 68:
+            discharge_byte = self._data[68]
+            self._log.info("Raw byte at offset 68 (discharge state): 0x%02X (%d)", discharge_byte, discharge_byte)
+        
+        decoded_data = BMS._decode_data(self._data)
+        
+        # Log the decoded discharge state
+        if "battery_discharging_state" in decoded_data:
+            self._log.info("Decoded battery_discharging_state: %s", decoded_data["battery_discharging_state"])
+
+        return decoded_data | BMSsample(
             {
                 "cell_voltages": BMS._cell_voltages(self._data, BMS.MAX_CELLS),
                 "temp_values": BMS._temp_sensors(self._data, BMS.MAX_TEMP),
@@ -174,11 +185,14 @@ class BMS(BaseBMS):
     async def enable_discharge(self) -> bool:
         """Enable battery discharge."""
         try:
+            self._log.info("=== ENABLE DISCHARGE COMMAND START ===")
+            self._log.info("Command bytes: %s", self._CMD_ENABLE_DISCHARGE.hex())
             await self._connect()
             await self._await_reply(
                 self._CMD_ENABLE_DISCHARGE, wait_for_notify=False
             )
-            self._log.debug("Discharge enabled successfully")
+            self._log.info("Discharge enabled successfully")
+            self._log.info("=== ENABLE DISCHARGE COMMAND END ===")
             return True
         except Exception as err:
             self._log.error("Failed to enable discharge: %s", err)
@@ -187,11 +201,14 @@ class BMS(BaseBMS):
     async def disable_discharge(self) -> bool:
         """Disable battery discharge."""
         try:
+            self._log.info("=== DISABLE DISCHARGE COMMAND START ===")
+            self._log.info("Command bytes: %s", self._CMD_DISABLE_DISCHARGE.hex())
             await self._connect()
             await self._await_reply(
                 self._CMD_DISABLE_DISCHARGE, wait_for_notify=False
             )
-            self._log.debug("Discharge disabled successfully")
+            self._log.info("Discharge disabled successfully")
+            self._log.info("=== DISABLE DISCHARGE COMMAND END ===")
             return True
         except Exception as err:
             self._log.error("Failed to disable discharge: %s", err)
