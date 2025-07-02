@@ -202,18 +202,20 @@ class BMS(BaseBMS):
 
     def _battery_discharging_state(self) -> bool:
         """Return interpreted battery discharging state for JBD BMS."""
-        if len(self._data_final) <= 21:
+        if len(self._data_final) <= 21 + 4:
             return self._last_discharge_state  # Return last known state
 
-        discharge_byte = self._data_final[20]  # Get the byte directly
+        hex_bytes = " ".join(f"0x{b:02x}" for b in self._data_final)
+        self._log.warning("bytes received:%s", hex_bytes)
+  
+        discharge_byte = self._data_final[4 + 20]  # Get the byte directly
         current_state = (discharge_byte & 2) == 2
         self._log.warning(
             "discharge state:%s  discharge_byte:%s",
             current_state,
             discharge_byte,
         )
-        hex_bytes = " ".join(f"0x{b:02x}" for b in self._data_final)
-        self._log.warning("bytes received:%s", hex_bytes)
+  
 
         self._last_discharge_state = current_state  # Store current state
         return current_state
