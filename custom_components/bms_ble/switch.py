@@ -23,22 +23,35 @@ async def async_setup_entry(
     """Set up switch platform."""
     coordinator = config_entry.runtime_data
     
-    LOGGER.debug("Setting up switch platform for BMS: %s", 
-                 coordinator.bms.__class__.__module__)
+    LOGGER.warning("=== SWITCH PLATFORM SETUP START ===")
+    LOGGER.warning("BMS class: %s", coordinator.bms.__class__.__name__)
+    LOGGER.warning("BMS module: %s", coordinator.bms.__class__.__module__)
     
-    # Add discharge switch for any BMS that has discharge control methods
-    if (hasattr(coordinator.bms, "enable_discharge") and 
-        hasattr(coordinator.bms, "disable_discharge")):
-        LOGGER.debug("Adding discharge control switch for BMS: %s", 
-                     coordinator.bms.__class__.__name__)
-        async_add_entities([
-            BTBmsDischargeSwitch(
-                coordinator, format_mac(config_entry.unique_id)
-            )
-        ])
+    # List all methods of the BMS object
+    bms_methods = [method for method in dir(coordinator.bms) if not method.startswith('_')]
+    LOGGER.warning("BMS methods: %s", bms_methods)
+    
+    # Check if BMS has discharge methods
+    has_enable = hasattr(coordinator.bms, "enable_discharge")
+    has_disable = hasattr(coordinator.bms, "disable_discharge")
+    
+    LOGGER.warning("BMS has enable_discharge: %s", has_enable)
+    LOGGER.warning("BMS has disable_discharge: %s", has_disable)
+    
+    # Force create switch for Redodo BMS regardless
+    if "redodo" in coordinator.bms.__class__.__module__.lower() or has_enable:
+        LOGGER.warning("CREATING DISCHARGE SWITCH!")
+        switch = BTBmsDischargeSwitch(
+            coordinator, format_mac(config_entry.unique_id)
+        )
+        LOGGER.warning("Switch created with unique_id: %s", switch.unique_id)
+        LOGGER.warning("Switch name: %s", switch.name)
+        async_add_entities([switch])
+        LOGGER.warning("Switch added to entities")
     else:
-        LOGGER.debug("BMS %s does not support discharge control", 
-                     coordinator.bms.__class__.__name__)
+        LOGGER.warning("NOT CREATING SWITCH - no conditions met")
+    
+    LOGGER.warning("=== SWITCH PLATFORM SETUP END ===")
 
 
 class BTBmsDischargeSwitch(CoordinatorEntity[BTBmsCoordinator], SwitchEntity):
@@ -53,6 +66,8 @@ class BTBmsDischargeSwitch(CoordinatorEntity[BTBmsCoordinator], SwitchEntity):
         self._attr_has_entity_name = True
         self._attr_name = "Battery discharging"
         self._attr_icon = "mdi:battery-arrow-down"
+        # Ensure this appears as a switch, not a sensor
+        self._attr_device_class = None
         super().__init__(coordinator)
 
     @property
