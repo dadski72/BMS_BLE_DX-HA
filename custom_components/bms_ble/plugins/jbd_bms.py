@@ -205,14 +205,12 @@ class BMS(BaseBMS):
         if len(self._data_final) <= 21:
             return self._last_discharge_state  # Return last known state
 
-        byte20 = self._data_final[20]  # Get the byte directly
-        discharge_state = (byte20 & 2) == 2
-        self._log.warning(
-            "JBD byte20 status (discharge state): %s", discharge_state
-        )
+        discharge_byte = self._data_final[20]  # Get the byte directly
+        current_state = (discharge_byte & 2) == 2
+        self._log.warning(f"discharge state:{current_state}  byte20:{discharge_byte}")
 
-        self._last_discharge_state = discharge_state  # Store current state
-        return discharge_state
+        self._last_discharge_state = current_state  # Store current state
+        return current_state
 
     async def _async_update(self) -> BMSsample:
         """Update battery status information."""

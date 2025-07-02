@@ -159,14 +159,17 @@ class BMS(BaseBMS):
         """Return interpreted battery discharging state for Redodo BMS."""
         if len(self._data) <= 68:
             return self._last_discharge_state  # Return last known state
-        
+
         # Log raw data for debugging discharge state
         discharge_byte = self._data[68]
-        self._log.warning("Raw byte at offset 68 (discharge state): 0x%02X (%d)", discharge_byte, discharge_byte)
-        
+        self._log.warning(
+            "Raw byte at offset 68 (discharge state): (%d)", discharge_byte
+        )
+
         # Redodo-specific logic: if raw value is 8 or 12, discharge is OFF
         current_state = discharge_byte not in (0x80, 12)
         self._last_discharge_state = current_state  # Store current state
+        self._log.warning(f"discharge state:{current_state}  byte20:{discharge_byte}")
         return current_state
 
     async def _async_update(self) -> BMSsample:
