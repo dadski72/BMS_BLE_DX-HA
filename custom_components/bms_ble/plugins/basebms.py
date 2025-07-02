@@ -63,6 +63,7 @@ class BMSsample(TypedDict, total=False):
     """Dictionary representing a sample of battery management system (BMS) data."""
 
     battery_charging: bool  # True: battery charging
+    battery_discharging_state: int | bool  # raw state or interpreted boolean
     battery_mode: BMSmode  # BMS charging mode
     battery_level: int | float  # [%]
     current: float  # [A] (positive: charging)

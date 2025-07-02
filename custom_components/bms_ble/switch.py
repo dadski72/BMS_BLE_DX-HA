@@ -77,18 +77,32 @@ class BTBmsDischargeSwitch(CoordinatorEntity[BTBmsCoordinator], SwitchEntity):
             LOGGER.debug("Switch is_on: coordinator.data is None")
             return None
         
-        # Get the raw value and log it
-        raw_value = self.coordinator.data.get("battery_discharging_state", 0)
-        LOGGER.info("Switch is_on: battery_discharging_state raw = %s (type: %s)", raw_value, type(raw_value))
+        # Get the boolean discharge state from BMS data
+        discharge_state = self.coordinator.data.get(
+            "battery_discharging_state"
+        )
+        LOGGER.info(
+            "Switch is_on: battery_discharging_state = %s (type: %s)",
+            discharge_state, type(discharge_state)
+        )
         
-        # Apply the logic: if raw value is 8 or 12, discharge is OFF, else it's ON
-        is_discharge_enabled = raw_value not in (8, 12)
-        LOGGER.info("Switch is_on: interpreted state = %s (raw %s not in [8,12])", is_discharge_enabled, raw_value)
+        # The BMS plugin should have already converted raw values to boolean
+        if isinstance(discharge_state, bool):
+            return discharge_state
         
-        # Also log all coordinator data for debugging
+        # Fallback for BMSs that don't interpret the value
+        if isinstance(discharge_state, int):
+            LOGGER.warning(
+                "BMS returned raw int value %s instead of boolean - "
+                "consider updating the BMS plugin",
+                discharge_state
+            )
+            return discharge_state not in (0, 8, 12)  # Generic fallback
+        
+        # Log all coordinator data for debugging
         LOGGER.debug("All coordinator data: %s", self.coordinator.data)
         
-        return is_discharge_enabled
+        return None
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn on discharge."""
@@ -102,8 +116,13 @@ class BTBmsDischargeSwitch(CoordinatorEntity[BTBmsCoordinator], SwitchEntity):
                 await self.coordinator.async_request_refresh()
                 # Log the state after refresh
                 if self.coordinator.data:
-                    new_state = self.coordinator.data.get("battery_discharging_state", False)
-                    LOGGER.info("After refresh, battery_discharging_state = %s", new_state)
+                    new_state = self.coordinator.data.get(
+                        "battery_discharging_state", False
+                    )
+                    LOGGER.info(
+                        "After refresh, battery_discharging_state = %s",
+                        new_state
+                    )
             else:
                 LOGGER.warning("enable_discharge() failed!")
         else:
@@ -121,8 +140,13 @@ class BTBmsDischargeSwitch(CoordinatorEntity[BTBmsCoordinator], SwitchEntity):
                 await self.coordinator.async_request_refresh()
                 # Log the state after refresh
                 if self.coordinator.data:
-                    new_state = self.coordinator.data.get("battery_discharging_state", False)
-                    LOGGER.info("After refresh, battery_discharging_state = %s", new_state)
+                    new_state = self.coordinator.data.get(
+                        "battery_discharging_state", False
+                    )
+                    LOGGER.info(
+                        "After refresh, battery_discharging_state = %s",
+                        new_state
+                    )
             else:
                 LOGGER.warning("disable_discharge() failed!")
         else:

@@ -132,6 +132,13 @@ class BMS(BaseBMS):
         for key, idx, size, sign, func in BMS._FIELDS:
             value = int.from_bytes(data[idx : idx + size], byteorder="little", signed=sign)
             result[key] = func(value)
+        
+        # Redodo-specific logic: convert raw discharge state to boolean
+        if "battery_discharging_state" in result:
+            raw_value = result["battery_discharging_state"]
+            # If raw value is 8 or 12, discharge is OFF, else it's ON
+            result["battery_discharging_state"] = raw_value not in (80, 120)
+        
         return result
 
     @staticmethod
