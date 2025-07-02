@@ -184,12 +184,12 @@ class BMS(BaseBMS):
     async def enable_discharge(self) -> bool:
         """Enable battery discharge."""
         try:
-            self._log.info("=== ENABLE DISCHARGE COMMAND START ===")
-            self._log.info("Command bytes: %s", self._CMD_ENABLE_DISCHARGE.hex())
+            self._log.warning("=== ENABLE DISCHARGE COMMAND START ===")
+            self._log.warning("Command bytes: %s", self._CMD_ENABLE_DISCHARGE.hex())
             await self._connect()
             await self._await_reply(self._CMD_ENABLE_DISCHARGE, wait_for_notify=False)
-            self._log.info("Discharge enabled successfully")
-            self._log.info("=== ENABLE DISCHARGE COMMAND END ===")
+            self._log.warning("Discharge enabled successfully")
+            self._log.warning("=== ENABLE DISCHARGE COMMAND END ===")
             return True
         except Exception as err:
             self._log.error("Failed to enable discharge: %s", err)

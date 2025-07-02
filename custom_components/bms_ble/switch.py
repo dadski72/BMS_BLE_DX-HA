@@ -23,9 +23,9 @@ async def async_setup_entry(
     """Set up switch platform."""
     coordinator = config_entry.runtime_data
     
-    LOGGER.warning("=== SWITCH PLATFORM SETUP START V2 ===")
-    LOGGER.warning("BMS class: %s", coordinator._device.__class__.__name__)
-    LOGGER.warning("BMS module: %s", coordinator._device.__class__.__module__)
+    # LOGGER.warning("=== SWITCH PLATFORM SETUP START V2 ===")
+    # LOGGER.warning("BMS class: %s", coordinator._device.__class__.__name__)
+    # LOGGER.warning("BMS module: %s", coordinator._device.__class__.__module__)
     
     # List all methods of the BMS object
     bms_methods = [method for method in dir(coordinator._device) if not method.startswith('_')]
@@ -35,23 +35,23 @@ async def async_setup_entry(
     has_enable = hasattr(coordinator._device, "enable_discharge")
     has_disable = hasattr(coordinator._device, "disable_discharge")
     
-    LOGGER.warning("BMS has enable_discharge: %s", has_enable)
-    LOGGER.warning("BMS has disable_discharge: %s", has_disable)
+    # LOGGER.warning("BMS has enable_discharge: %s", has_enable)
+    # LOGGER.warning("BMS has disable_discharge: %s", has_disable)
     
     # Force create switch for Redodo BMS regardless
     if "redodo" in coordinator._device.__class__.__module__.lower() or has_enable:
-        LOGGER.warning("CREATING DISCHARGE SWITCH!")
+        # LOGGER.warning("CREATING DISCHARGE SWITCH!")
         switch = BTBmsDischargeSwitch(
             coordinator, format_mac(config_entry.unique_id)
         )
-        LOGGER.warning("Switch created with unique_id: %s", switch.unique_id)
-        LOGGER.warning("Switch name: %s", switch.name)
+        # LOGGER.warning("Switch created with unique_id: %s", switch.unique_id)
+        # LOGGER.warning("Switch name: %s", switch.name)
         async_add_entities([switch])
-        LOGGER.warning("Switch added to entities")
+        #LOGGER.warning("Switch added to entities")
     else:
         LOGGER.warning("NOT CREATING SWITCH - no conditions met")
     
-    LOGGER.warning("=== SWITCH PLATFORM SETUP END ===")
+    #LOGGER.warning("=== SWITCH PLATFORM SETUP END ===")
 
 
 class BTBmsDischargeSwitch(CoordinatorEntity[BTBmsCoordinator], SwitchEntity):
