@@ -37,6 +37,7 @@ class BMS(BaseBMS):
     def __init__(self, ble_device: BLEDevice, reconnect: bool = False) -> None:
         """Initialize BMS."""
         super().__init__(__name__, ble_device, reconnect)
+        self._last_discharge_state: bool = False
 
     @staticmethod
     def matcher_dict_list() -> list[AdvertisementPattern]:
@@ -154,18 +155,19 @@ class BMS(BaseBMS):
             )
         ]
 
-    @staticmethod
     def _battery_discharging_state(self) -> bool:
         """Return interpreted battery discharging state for Redodo BMS."""
         if len(self._data) <= 68:
-            return False
+            return self._last_discharge_state  # Return last known state
         
         # Log raw data for debugging discharge state
         discharge_byte = self._data[68]
         self._log.warning("Raw byte at offset 68 (discharge state): 0x%02X (%d)", discharge_byte, discharge_byte)
         
         # Redodo-specific logic: if raw value is 8 or 12, discharge is OFF
-        return discharge_byte not in (0x80, 12)
+        current_state = discharge_byte not in (0x80, 12)
+        self._last_discharge_state = current_state  # Store current state
+        return current_state
 
     async def _async_update(self) -> BMSsample:
         """Update battery status information."""
@@ -177,7 +179,7 @@ class BMS(BaseBMS):
             {
                 "cell_voltages": BMS._cell_voltages(self._data, BMS.MAX_CELLS),
                 "temp_values": BMS._temp_sensors(self._data, BMS.MAX_TEMP),
-                "battery_discharging_state": BMS._battery_discharging_state(self),
+                "battery_discharging_state": self._battery_discharging_state(),
             }
         )
 
