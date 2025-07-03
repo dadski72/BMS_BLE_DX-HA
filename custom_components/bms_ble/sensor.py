@@ -68,7 +68,7 @@ SENSOR_TYPES: Final[list[BmsEntityDescription]] = [
         native_unit_of_measurement=UnitOfElectricPotential.VOLT,
         state_class=SensorStateClass.MEASUREMENT,
         device_class=SensorDeviceClass.VOLTAGE,
-        suggested_display_precision=1,
+        suggested_display_precision=2,
         value_fn=lambda data: data.get("voltage"),
         attr_fn=lambda data: _attr_pack(data, "pack_voltages", [0.0]),
     ),

@@ -1,0 +1,498 @@
+# Simple Battery Protection Configuration
+# Add this to your configuration.yaml or packages/battery_protection.yaml
+
+# Template sensor for monitoring average battery level
+template:
+  - sensor:
+      - name: "Average Battery Level"
+        unique_id: average_battery_level
+        state: >
+          {% set batteries = states.sensor 
+            | selectattr('entity_id', 'search', '_battery(_[0-9]+)?$')
+            | rejectattr('entity_id', 'eq', 'sensor.average_battery_level')
+            | selectattr('state', 'is_number')
+            | list %}
+          {% if batteries | length > 0 %}
+            {% set total_level = batteries | map(attribute='state') | map('float') | sum %}
+            {{ (total_level / batteries | length) | round(1) }}
+          {% else %}
+            unavailable
+          {% endif %}
+        unit_of_measurement: "%"
+        device_class: battery
+        state_class: measurement
+        icon: mdi:battery-heart-variant
+        attributes:
+          # Show total vs available battery count
+          battery_count: >
+            {% set all_batteries = states.sensor 
+              | selectattr('entity_id', 'search', '_battery(_[0-9]+)?$')
+              | rejectattr('entity_id', 'eq', 'sensor.average_battery_level')
+              | list %}
+            {% set available_batteries = all_batteries 
+              | selectattr('state', 'is_number')
+              | list %}
+            {{ available_batteries | length }} of {{ all_batteries | length }} batteries
+          
+          # List available batteries being monitored
+          available_batteries: >
+            {% set batteries = states.sensor 
+              | selectattr('entity_id', 'search', '_battery(_[0-9]+)?$')
+              | rejectattr('entity_id', 'eq', 'sensor.average_battery_level')
+              | selectattr('state', 'is_number')
+              | list %}
+            {% set battery_names = [] %}
+            {% for battery in batteries %}
+              {% set name = battery.attributes.friendly_name or battery.entity_id.split('.')[1] %}
+              {% set battery_names = battery_names + [name + ' (' + battery.state + '%)'] %}
+            {% endfor %}
+            {{ battery_names | join(', ') }}
+          
+          # List unavailable batteries
+          unavailable_batteries: >
+            {% set all_batteries = states.sensor 
+              | selectattr('entity_id', 'search', '_battery(_[0-9]+)?$')
+              | rejectattr('entity_id', 'eq', 'sensor.average_battery_level')
+              | list %}
+            {% set unavailable_batteries = all_batteries 
+              | rejectattr('state', 'is_number')
+              | list %}
+            {% if unavailable_batteries | length > 0 %}
+              {% set battery_names = [] %}
+              {% for battery in unavailable_batteries %}
+                {% set name = battery.attributes.friendly_name or battery.entity_id.split('.')[1] %}
+                {% set battery_names = battery_names + [name + ' (' + battery.state + ')'] %}
+              {% endfor %}
+              {{ battery_names | join(', ') }}
+            {% else %}
+              None
+            {% endif %}
+          
+          individual_levels: >
+            {% set batteries = states.sensor 
+              | selectattr('entity_id', 'search', '_battery(_[0-9]+)?$')
+              | rejectattr('entity_id', 'eq', 'sensor.average_battery_level')
+              | selectattr('state', 'is_number')
+              | list %}
+            {% set levels = [] %}
+            {% for battery in batteries %}
+              {% set battery_info = {
+                'name': battery.attributes.friendly_name or battery.name,
+                'level': battery.state | float,
+                'entity_id': battery.entity_id,
+                'status': 'available'
+              } %}
+              {% set levels = levels + [battery_info] %}
+            {% endfor %}
+            {{ levels | sort(attribute='level') }}
+          solar_inverter_status: "{{ states('switch.solar_inverter') }}"
+          protection_status: >
+            {% set batteries = states.sensor 
+              | selectattr('entity_id', 'search', '_battery(_[0-9]+)?$')
+              | rejectattr('entity_id', 'eq', 'sensor.average_battery_level')
+              | selectattr('state', 'is_number')
+              | list %}
+            {% if batteries | length > 0 %}
+              {% set total_level = batteries | map(attribute='state') | map('float') | sum %}
+              {% set avg = (total_level / batteries | length) | round(1) %}
+              {% if avg <= 40 %}
+                Solar should be OFF
+              {% elif avg > 50 %}
+                Solar should be ON  
+              {% else %}
+                Hysteresis zone (40-50%)
+              {% endif %}
+            {% else %}
+              No batteries detected
+            {% endif %}
+
+automation:
+  - id: battery_discharge_protection
+    alias: "Battery Discharge Protection"
+    description: "Disable discharging for lowest battery, enable for others"
+    trigger:
+      - platform: time_pattern
+        minutes: "*"  # Runs every minute
+      - platform: homeassistant
+        event: start  # Also trigger on HA startup (with delay)
+    action:
+      # Wait for system to stabilize after HA restart
+      - delay:
+          seconds: >
+            {% if trigger.platform == 'homeassistant' %}
+              90
+            {% else %}
+              5
+            {% endif %}
+      
+      # Skip startup period checks if triggered manually, otherwise ensure we have stable data
+      - condition: template
+        value_template: >
+          {% if trigger.platform == 'homeassistant' %}
+            true
+          {% else %}
+            {% set all_batteries = states.sensor 
+              | selectattr('entity_id', 'search', '_battery(_[0-9]+)?$')
+              | rejectattr('entity_id', 'eq', 'sensor.average_battery_level')
+              | list %}
+            {% set available_batteries = all_batteries 
+              | selectattr('state', 'is_number')
+              | list %}
+            {% if all_batteries | length > 0 %}
+              {{ available_batteries | length >= 2 and (available_batteries | length >= all_batteries | length * 0.8) }}
+            {% else %}
+              false
+            {% endif %}
+          {% endif %}
+      - variables:
+          # Get all battery level sensors as simple list (excluding the average sensor itself)
+          battery_entities: >
+            {{ states.sensor 
+              | selectattr('entity_id', 'search', '_battery(_[0-9]+)?$')
+              | rejectattr('entity_id', 'eq', 'sensor.average_battery_level')
+              | selectattr('state', 'is_number')
+              | map(attribute='entity_id')
+              | list }}
+          
+          # Count total battery sensors (including unavailable ones)
+          total_battery_sensors: >
+            {{ states.sensor 
+              | selectattr('entity_id', 'search', '_battery(_[0-9]+)?$')
+              | rejectattr('entity_id', 'eq', 'sensor.average_battery_level')
+              | list | length }}
+          
+          # Get list of unavailable battery names for logging
+          unavailable_battery_names: >
+            {% set all_batteries = states.sensor 
+              | selectattr('entity_id', 'search', '_battery(_[0-9]+)?$')
+              | rejectattr('entity_id', 'eq', 'sensor.average_battery_level')
+              | list %}
+            {% set unavailable_batteries = all_batteries 
+              | rejectattr('state', 'is_number')
+              | list %}
+            {% set names = [] %}
+            {% for battery in unavailable_batteries %}
+              {% set name = battery.attributes.friendly_name or battery.entity_id.split('.')[1] %}
+              {% set names = names + [name + ' (' + battery.state + ')'] %}
+            {% endfor %}
+            {{ names | join(', ') if names | length > 0 else 'None' }}
+          
+          # Find the battery with lowest level
+          lowest_battery_entity: >
+            {% set batteries = states.sensor 
+              | selectattr('entity_id', 'search', '_battery(_[0-9]+)?$')
+              | rejectattr('entity_id', 'eq', 'sensor.average_battery_level')
+              | selectattr('state', 'is_number')
+              | list %}
+            {% if batteries | length > 0 %}
+              {{ (batteries | min(attribute='state')).entity_id }}
+            {% else %}
+              none
+            {% endif %}
+          
+          # Get average battery level from template sensor
+          average_battery_level: "{{ states('sensor.average_battery_level') | float(0) }}"
+          
+          # Check if we have sufficient battery data (at least 1 available, and if multiple exist, at least 60% available)
+          sufficient_data: >
+            {% if total_battery_sensors == 0 %}
+              false
+            {% elif total_battery_sensors == 1 %}
+              {{ battery_entities | length >= 1 }}
+            {% else %}
+              {{ battery_entities | length >= 1 and (battery_entities | length / total_battery_sensors) >= 0.6 }}
+            {% endif %}
+      
+      # Only proceed if we have sufficient battery data
+      - condition: template
+        value_template: "{{ sufficient_data }}"
+      
+      # Log startup trigger specifically
+      - if:
+          - condition: template
+            value_template: "{{ trigger.platform == 'homeassistant' }}"
+        then:
+          - service: system_log.write
+            data:
+              message: "🚀 Battery Protection: Starting up after HA restart. Found {{ battery_entities | length }}/{{ total_battery_sensors }} batteries available."
+              level: info
+              logger: battery_protection
+      
+      # Log current battery status with detailed availability info
+      - service: system_log.write
+        data:
+          message: >
+            🔋 Battery Status: {{ battery_entities | length }}/{{ total_battery_sensors }} available
+            {%- if battery_entities | length > 0 -%}
+            , Average: {{ average_battery_level }}%
+            {%- endif -%}
+            , Solar: {{ states('switch.solar_inverter') }}
+            {%- if unavailable_battery_names != 'None' -%}
+            . ⚠️ Unavailable: {{ unavailable_battery_names }}
+            {%- endif %}
+          level: >
+            {% if battery_entities | length < total_battery_sensors %}
+              warning
+            {% else %}
+              debug
+            {% endif %}
+          logger: battery_protection
+      
+      # Add special handling for single battery scenarios
+      - if:
+          - condition: template
+            value_template: "{{ battery_entities | length == 1 }}"
+        then:
+          - service: system_log.write
+            data:
+              message: "🔋 Single Battery Mode: Only 1 battery available, ensuring it stays enabled for critical functions"
+              level: info
+              logger: battery_protection
+          # Ensure the single battery discharging switch is ON for critical loads
+          - service: switch.turn_on
+            target:
+              entity_id: "switch.{{ battery_entities[0].split('.')[1] }}_discharging"
+      
+      # Smart battery management (only when multiple batteries available)
+      - if:
+          - condition: template
+            value_template: "{{ battery_entities | length > 1 }}"
+        then:
+          - variables:
+              # Check if any battery is charging (current >= 0) - this overrides protection logic
+              charging_detected: >
+                {% set current_sensors = states.sensor 
+                  | selectattr('entity_id', 'search', '_current(_[0-9]+)?$')
+                  | selectattr('state', 'is_number')
+                  | list %}
+                {% set charging_batteries = current_sensors 
+                  | selectattr('state', 'float', '>=', 0)
+                  | list %}
+                {{ charging_batteries | length > 0 }}
+              
+              # Get list of charging battery names for logging
+              charging_battery_names: >
+                {% set current_sensors = states.sensor 
+                  | selectattr('entity_id', 'search', '_current(_[0-9]+)?$')
+                  | selectattr('state', 'is_number')
+                  | list %}
+                {% set charging_batteries = current_sensors 
+                  | selectattr('state', 'float', '>=', 0)
+                  | list %}
+                {% set names = [] %}
+                {% for sensor in charging_batteries %}
+                  {% set name = sensor.attributes.friendly_name or sensor.entity_id.split('.')[1] %}
+                  {% set names = names + [name + ' (' + sensor.state + 'A)'] %}
+                {% endfor %}
+                {{ names | join(', ') if names | length > 0 else 'None' }}
+              
+              # Calculate how many batteries should be protected based on total count
+              # Keep at least 3 batteries enabled for discharging
+              # Examples: 7 batteries -> protect 4 lowest, 6 batteries -> protect 3 lowest,
+              #          5 batteries -> protect 2 lowest, 4 batteries -> protect 1 lowest, 
+              #          3 or fewer -> protect 1 lowest
+              batteries_to_protect: >
+                {% set total = battery_entities | length %}
+                {% if total <= 3 %}
+                  1
+                {% else %}
+                  {{ total - 3 }}
+                {% endif %}
+              
+              # Get battery levels and sort them to identify lowest ones
+              battery_levels_sorted: >
+                {% set levels = [] %}
+                {% for entity_id in battery_entities %}
+                  {% set level = states(entity_id) | float %}
+                  {% set levels = levels + [{'entity_id': entity_id, 'level': level}] %}
+                {% endfor %}
+                {{ levels | sort(attribute='level') }}
+              
+              # Get list of batteries that should be protected (lowest ones)
+              batteries_to_be_protected: >
+                {% set sorted_batteries = battery_levels_sorted %}
+                {% set protect_count = batteries_to_protect | int %}
+                {% set protected_list = [] %}
+                {% for i in range(protect_count) %}
+                  {% if i < sorted_batteries | length %}
+                    {% set protected_list = protected_list + [sorted_batteries[i].entity_id] %}
+                  {% endif %}
+                {% endfor %}
+                {{ protected_list }}
+          
+          # Check for charging override first
+          - if:
+              - condition: template
+                value_template: "{{ charging_detected }}"
+            then:
+              - service: system_log.write
+                data:
+                  message: "� CHARGING DETECTED: Enabling ALL batteries for discharging (charging override active). Charging batteries: {{ charging_battery_names }}"
+                  level: warning
+                  logger: battery_protection
+              
+              # Enable ALL batteries when charging is detected
+              - repeat:
+                  for_each: "{{ battery_entities }}"
+                  sequence:
+                    - variables:
+                        battery_entity: "{{ repeat.item }}"
+                        battery_name: "{{ state_attr(battery_entity, 'friendly_name') or battery_entity.split('.')[1] }}"
+                        switch_entity: "switch.{{ battery_entity.split('.')[1] }}_discharging"
+                        switch_state: "{{ states(switch_entity) }}"
+                    
+                    - if:
+                        - condition: template
+                          value_template: "{{ switch_state == 'off' }}"
+                      then:
+                        - service: switch.turn_on
+                          target:
+                            entity_id: "{{ switch_entity }}"
+                        - service: system_log.write
+                          data:
+                            message: "🔌 CHARGING OVERRIDE: Enabled {{ battery_name }} discharging (charging detected elsewhere)"
+                            level: warning
+                            logger: battery_protection
+            else:
+              # Normal protection logic when no charging detected
+              - service: system_log.write
+                data:
+                  message: "�🔋 PROTECTION LOGIC: {{ battery_entities | length }} batteries, protecting {{ batteries_to_protect }} lowest ones, keeping {{ battery_entities | length - batteries_to_protect }} enabled"
+                  level: debug
+                  logger: battery_protection
+              
+              - repeat:
+                  for_each: "{{ battery_entities }}"
+                  sequence:
+                    - variables:
+                        battery_entity: "{{ repeat.item }}"
+                        battery_level: "{{ states(battery_entity) | float }}"
+                        battery_name: "{{ state_attr(battery_entity, 'friendly_name') or battery_entity.split('.')[1] }}"
+                        # Convert sensor entity ID to switch entity ID
+                        switch_entity: "switch.{{ battery_entity.split('.')[1] }}_discharging"
+                        switch_state: "{{ states(switch_entity) }}"
+                        should_be_protected: "{{ battery_entity in batteries_to_be_protected }}"
+                    
+                    - choose:
+                        # Case 1: Battery should be protected (is among lowest) and is currently ON - turn it OFF
+                        - conditions:
+                            - condition: template
+                              value_template: "{{ should_be_protected and switch_state == 'on' }}"
+                          sequence:
+                            - service: switch.turn_off
+                              target:
+                                entity_id: "{{ switch_entity }}"
+                            - service: system_log.write
+                              data:
+                                message: "🔋 PROTECTED: Disabled discharging for {{ battery_name }} ({{ battery_level }}% - among {{ batteries_to_protect }} lowest)"
+                                level: warning
+                                logger: battery_protection
+                        
+                        # Case 2: Battery should NOT be protected (not among lowest) and is currently OFF - turn it ON
+                        - conditions:
+                            - condition: template
+                              value_template: "{{ not should_be_protected and switch_state == 'off' }}"
+                          sequence:
+                            - service: switch.turn_on
+                              target:
+                                entity_id: "{{ switch_entity }}"
+                            - service: system_log.write
+                              data:
+                                message: "🔋 ENABLED: Restored discharging for {{ battery_name }} ({{ battery_level }}% - not among lowest anymore)"
+                                level: info
+                                logger: battery_protection
+
+      # Solar Inverter Control Based on Average Battery Level (only if we have battery data)
+      - if:
+          - condition: template
+            value_template: "{{ battery_entities | length > 0 and average_battery_level > 0 }}"
+        then:
+          - choose:
+              # Case 1: Average battery level ≤ 40% and inverter is ON - turn it OFF
+              - conditions:
+                  - condition: template
+                    value_template: "{{ average_battery_level | float <= 40 }}"
+                  - condition: state
+                    entity_id: switch.solar_inverter
+                    state: "on"
+                sequence:
+                  - service: switch.turn_off
+                    target:
+                      entity_id: switch.solar_inverter
+                  - service: system_log.write
+                    data:
+                      message: "☀️ SOLAR OFF: Disabled solar inverter (average battery: {{ average_battery_level }}% ≤ 40%, {{ battery_entities | length }} batteries)"
+                      level: warning
+                      logger: battery_protection
+                  # Emergency: Enable ALL batteries when solar is turned off due to low levels
+                  - repeat:
+                      for_each: "{{ battery_entities }}"
+                      sequence:
+                        - variables:
+                            emergency_switch: "switch.{{ repeat.item.split('.')[1] }}_discharging"
+                        - if:
+                            - condition: template
+                              value_template: "{{ states(emergency_switch) == 'off' }}"
+                          then:
+                            - service: switch.turn_on
+                              target:
+                                entity_id: "{{ emergency_switch }}"
+                            - service: system_log.write
+                              data:
+                                message: "🚨 EMERGENCY: Enabled {{ repeat.item.split('.')[1] }} discharging due to solar inverter shutdown"
+                                level: warning
+                                logger: battery_protection
+              
+              # Case 2: Average battery level > 50% and inverter is OFF - turn it ON
+              - conditions:
+                  - condition: template
+                    value_template: "{{ average_battery_level | float > 50 }}"
+                  - condition: state
+                    entity_id: switch.solar_inverter
+                    state: "off"
+                sequence:
+                  - service: switch.turn_on
+                    target:
+                      entity_id: switch.solar_inverter
+                  - service: system_log.write
+                    data:
+                      message: "☀️ SOLAR ON: Enabled solar inverter (average battery: {{ average_battery_level }}% > 50%, {{ battery_entities | length }} batteries)"
+                      level: info
+                      logger: battery_protection
+              
+              # Case 3: Solar inverter is OFF (emergency mode) - ensure ALL batteries are enabled
+              - conditions:
+                  - condition: state
+                    entity_id: switch.solar_inverter
+                    state: "off"
+                sequence:
+                  - service: system_log.write
+                    data:
+                      message: "🚨 SOLAR INVERTER OFF: Emergency mode - ensuring all batteries are enabled for maximum power availability"
+                      level: warning
+                      logger: battery_protection
+                  - repeat:
+                      for_each: "{{ battery_entities }}"
+                      sequence:
+                        - variables:
+                            emergency_switch: "switch.{{ repeat.item.split('.')[1] }}_discharging"
+                            battery_name: "{{ state_attr(repeat.item, 'friendly_name') or repeat.item.split('.')[1] }}"
+                        - if:
+                            - condition: template
+                              value_template: "{{ states(emergency_switch) == 'off' }}"
+                          then:
+                            - service: switch.turn_on
+                              target:
+                                entity_id: "{{ emergency_switch }}"
+                            - service: system_log.write
+                              data:
+                                message: "🚨 EMERGENCY ENABLE: {{ battery_name }} discharging enabled (solar inverter is OFF)"
+                                level: warning
+                                logger: battery_protection
+        else:
+          # Log when solar control is disabled due to no battery data
+          - service: system_log.write
+            data:
+              message: "☀️ SOLAR CONTROL DISABLED: No battery data available for solar inverter control"
+              level: warning
+              logger: battery_protection
