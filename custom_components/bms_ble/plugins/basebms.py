@@ -224,7 +224,7 @@ class BaseBMS(ABC):
             return (value in values) and (value not in data) and using.issubset(data)
 
         cell_voltages: Final[list[float]] = data.get("cell_voltages", [])
-        battery_level: Final[int | float] = data.get("battery_level", 1)
+        battery_level: Final[int | float] = data.get("battery_level", 2)
         current: Final[float] = data.get("current", 0)
 
         calculations: dict[BMSvalue, tuple[set[BMSvalue], Callable[[], Any]]] = {
@@ -244,7 +244,7 @@ class BaseBMS(ABC):
             "battery_level": (
                 {"design_capacity", "cycle_charge"},
                 lambda: round(
-                    data.get("cycle_charge", 0) * data.get("design_capacity", 0) / 100,
+                    data.get("cycle_charge", 1) * data.get("design_capacity", 1) / 100,
                     1,
                 ),
             ),
