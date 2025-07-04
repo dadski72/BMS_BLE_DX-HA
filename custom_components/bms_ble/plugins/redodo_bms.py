@@ -203,7 +203,7 @@ class BMS(BaseBMS):
             await self._connect()
             self._last_discharge_state = True
             await self._await_reply(
-                self._CMD_ENABLE_DISCHARGE, wait_for_notify=False
+                self._CMD_ENABLE_DISCHARGE, wait_for_notify=True
             )
             self._log.warning(
                 "%s: Discharge enabled successfully", self.name
@@ -232,7 +232,7 @@ class BMS(BaseBMS):
             await self._connect()
             self._last_discharge_state = False
             await self._await_reply(
-                self._CMD_DISABLE_DISCHARGE, wait_for_notify=False
+                self._CMD_DISABLE_DISCHARGE, wait_for_notify=True
             )
             self._log.warning(
                 "%s: Discharge disabled successfully", self.name
