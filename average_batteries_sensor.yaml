@@ -1,0 +1,98 @@
+# Battery Template Sensors for Home Assistant
+# This file contains template sensors for battery monitoring and management
+
+template:
+  - sensor:
+      - name: "Average Batteries SOC"
+        unique_id: "dadski_battery_average_soc"
+        state: >
+          {% set ns = namespace(battery_values=[]) %}
+          {% for state in states.sensor %}
+            {% if state.entity_id | regex_match('^sensor\.dadski_battery_[a-z][0-9]+_soc$') %}
+              {% if state.state | is_number and state.state not in ['unavailable', 'unknown'] %}
+                {% set ns.battery_values = ns.battery_values + [state.state | float] %}
+              {% endif %}
+            {% endif %}
+          {% endfor %}
+          {% if ns.battery_values | length > 0 %}
+            {{ (ns.battery_values | sum / ns.battery_values | length) | round(1) }}
+          {% else %}
+            {{ none }}
+          {% endif %}
+        unit_of_measurement: "%"
+        device_class: battery
+        state_class: measurement
+        availability: >
+          {% set ns = namespace(battery_values=[]) %}
+          {% for state in states.sensor %}
+            {% if state.entity_id | regex_match('^sensor\.dadski_battery_[a-z][0-9]+_soc$') %}
+              {% if state.state | is_number and state.state not in ['unavailable', 'unknown'] %}
+                {% set ns.battery_values = ns.battery_values + [state.state | float] %}
+              {% endif %}
+            {% endif %}
+          {% endfor %}
+          {{ ns.battery_values | length > 0 }}
+        icon: mdi:battery-outline
+        attributes:
+          battery_count: >
+            {% set ns = namespace(valid_count=0) %}
+            {% for state in states.sensor %}
+              {% if state.entity_id | regex_match('^sensor\.dadski_battery_[a-z][0-9]+_soc$') %}
+                {% if state.state | is_number and state.state not in ['unavailable', 'unknown'] %}
+                  {% set ns.valid_count = ns.valid_count + 1 %}
+                {% endif %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.valid_count }}
+          individual_soc: >
+            {% set ns = namespace(battery_data=[]) %}
+            {% for state in states.sensor %}
+              {% if state.entity_id | regex_match('^sensor\.dadski_battery_[a-z][0-9]+_soc$') %}
+                {% set battery_name = state.entity_id | regex_replace('^sensor\.dadski_battery_([a-z][0-9]+)_soc$', '\\1') %}
+                {% if state.state | is_number and state.state not in ['unavailable', 'unknown'] %}
+                  {% set ns.battery_data = ns.battery_data + [battery_name + ': ' + state.state + '%'] %}
+                {% endif %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.battery_data | join(', ') }}
+      - name: "Battery Debug Info"
+        unique_id: "dadski_battery_debug_info"
+        state: >
+          {% set ns = namespace(battery_sensors=[], matching_sensors=[]) %}
+          {% for state in states.sensor %}
+            {% if 'dadski_battery' in state.entity_id %}
+              {% set ns.battery_sensors = ns.battery_sensors + [state.entity_id] %}
+            {% endif %}
+            {% if state.entity_id | regex_match('^sensor\.dadski_battery_[a-z][0-9]+_soc$') %}
+              {% set ns.matching_sensors = ns.matching_sensors + [state.entity_id + ':' + state.state] %}
+            {% endif %}
+          {% endfor %}
+          Found {{ ns.battery_sensors | length }} dadski_battery sensors, {{ ns.matching_sensors | length }} matching pattern
+        attributes:
+          all_dadski_battery_sensors: >
+            {% set ns = namespace(battery_sensors=[]) %}
+            {% for state in states.sensor %}
+              {% if 'dadski_battery' in state.entity_id %}
+                {% set ns.battery_sensors = ns.battery_sensors + [state.entity_id + ' (' + state.state + ')'] %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.battery_sensors | join(', ') }}
+          pattern_matching_sensors: >
+            {% set ns = namespace(matching_sensors=[]) %}
+            {% for state in states.sensor %}
+              {% if state.entity_id | regex_match('^sensor\.dadski_battery_[a-z][0-9]+_soc$') %}
+                {% set ns.matching_sensors = ns.matching_sensors + [state.entity_id + ' (' + state.state + ')'] %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.matching_sensors | join(', ') }}
+          valid_numeric_sensors: >
+            {% set ns = namespace(valid_sensors=[]) %}
+            {% for state in states.sensor %}
+              {% if state.entity_id | regex_match('^sensor\.dadski_battery_[a-z][0-9]+_soc$') %}
+                {% if state.state | is_number and state.state not in ['unavailable', 'unknown'] %}
+                  {% set ns.valid_sensors = ns.valid_sensors + [state.entity_id + ' (' + state.state + '%)'] %}
+                {% endif %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.valid_sensors | join(', ') }}
+          expected_pattern: "sensor.dadski_battery_[letter][number]_soc (e.g., sensor.dadski_battery_r1_soc)"

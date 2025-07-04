@@ -1,0 +1,25 @@
+# Emergency: Turn all battery switches back ON
+automation:
+  - id: emergency_restore_battery_switches
+    alias: "Emergency: Restore Battery Switches"
+    description: "Turn all battery discharging switches back ON after incorrect shutdown"
+    trigger:
+      - platform: homeassistant
+        event: start
+    mode: single
+    action:
+      - service: switch.turn_on
+        target:
+          entity_id:
+            - switch.dadski_battery_r1_discharging
+            - switch.dadski_battery_r2_discharging
+            - switch.dadski_battery_r3_discharging
+            - switch.dadski_battery_r4_discharging
+            - switch.dadski_battery_z1_discharging
+            - switch.dadski_battery_z2_discharging
+            - switch.dadski_battery_z3_discharging
+      - service: system_log.write
+        data:
+          message: "🔧 EMERGENCY: Restored all battery discharging switches to ON after incorrect protection logic"
+          level: warning
+          logger: battery_protection
