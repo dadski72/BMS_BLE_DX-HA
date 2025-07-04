@@ -224,7 +224,7 @@ class BaseBMS(ABC):
             return (value in values) and (value not in data) and using.issubset(data)
 
         cell_voltages: Final[list[float]] = data.get("cell_voltages", [])
-        battery_level: Final[int | float] = data.get("battery_level", 0)
+        battery_level: Final[int | float] = data.get("battery_level", 1)
         current: Final[float] = data.get("current", 0)
 
         calculations: dict[BMSvalue, tuple[set[BMSvalue], Callable[[], Any]]] = {
