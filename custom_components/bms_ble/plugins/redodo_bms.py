@@ -164,7 +164,7 @@ class BMS(BaseBMS):
         discharge_byte = self._data[68]
         self._log.warning(
             "%s: Raw byte at offset 68 (discharge state): (%d)",
-            self._device.name, discharge_byte
+            self.name, discharge_byte
         )
 
         # Redodo-specific logic: if raw value is 8 or 12, discharge is OFF
@@ -172,7 +172,7 @@ class BMS(BaseBMS):
         self._last_discharge_state = current_state  # Store current state
         self._log.warning(
             "%s: discharge state:%s  discharge_byte:%d",
-            self._device.name, current_state, discharge_byte
+            self.name, current_state, discharge_byte
         )
         return current_state
 
@@ -194,11 +194,11 @@ class BMS(BaseBMS):
         """Enable battery discharge."""
         try:
             self._log.warning(
-                "%s: === ENABLE DISCHARGE COMMAND START ===", self._device.name
+                "%s: === ENABLE DISCHARGE COMMAND START ===", self.name
             )
             self._log.warning(
                 "%s: Command bytes: %s",
-                self._device.name, self._CMD_ENABLE_DISCHARGE.hex()
+                self.name, self._CMD_ENABLE_DISCHARGE.hex()
             )
             await self._connect()
             self._last_discharge_state = True
@@ -206,15 +206,15 @@ class BMS(BaseBMS):
                 self._CMD_ENABLE_DISCHARGE, wait_for_notify=False
             )
             self._log.warning(
-                "%s: Discharge enabled successfully", self._device.name
+                "%s: Discharge enabled successfully", self.name
             )
             self._log.warning(
-                "%s: === ENABLE DISCHARGE COMMAND END ===", self._device.name
+                "%s: === ENABLE DISCHARGE COMMAND END ===", self.name
             )
             return True
         except Exception as err:
             self._log.error(
-                "%s: Failed to enable discharge: %s", self._device.name, err
+                "%s: Failed to enable discharge: %s", self.name, err
             )
             return False
 
@@ -223,11 +223,11 @@ class BMS(BaseBMS):
         try:
             self._log.warning(
                 "%s: === DISABLE DISCHARGE COMMAND START ===",
-                self._device.name
+                self.name
             )
             self._log.warning(
                 "%s: Command bytes: %s",
-                self._device.name, self._CMD_DISABLE_DISCHARGE.hex()
+                self.name, self._CMD_DISABLE_DISCHARGE.hex()
             )
             await self._connect()
             self._last_discharge_state = False
@@ -235,14 +235,14 @@ class BMS(BaseBMS):
                 self._CMD_DISABLE_DISCHARGE, wait_for_notify=False
             )
             self._log.warning(
-                "%s: Discharge disabled successfully", self._device.name
+                "%s: Discharge disabled successfully", self.name
             )
             self._log.warning(
-                "%s: === DISABLE DISCHARGE COMMAND END ===", self._device.name
+                "%s: === DISABLE DISCHARGE COMMAND END ===", self.name
             )
             return True
         except Exception as err:
             self._log.error(
-                "%s: Failed to disable discharge: %s", self._device.name, err
+                "%s: Failed to disable discharge: %s", self.name, err
             )
             return False
