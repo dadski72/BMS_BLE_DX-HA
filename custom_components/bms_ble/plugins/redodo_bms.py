@@ -163,13 +163,17 @@ class BMS(BaseBMS):
         # Log raw data for debugging discharge state
         discharge_byte = self._data[68]
         self._log.warning(
-            "Raw byte at offset 68 (discharge state): (%d)", discharge_byte
+            "%s: Raw byte at offset 68 (discharge state): (%d)",
+            self._device.name, discharge_byte
         )
 
         # Redodo-specific logic: if raw value is 8 or 12, discharge is OFF
         current_state = discharge_byte not in (0x80, 12)
         self._last_discharge_state = current_state  # Store current state
-        self._log.warning(f"discharge state:{current_state}  discharge_byte:{discharge_byte}")
+        self._log.warning(
+            "%s: discharge state:%s  discharge_byte:%d",
+            self._device.name, current_state, discharge_byte
+        )
         return current_state
 
     async def _async_update(self) -> BMSsample:
@@ -189,29 +193,56 @@ class BMS(BaseBMS):
     async def enable_discharge(self) -> bool:
         """Enable battery discharge."""
         try:
-            self._log.warning("=== ENABLE DISCHARGE COMMAND START ===")
-            self._log.warning("Command bytes: %s", self._CMD_ENABLE_DISCHARGE.hex())
+            self._log.warning(
+                "%s: === ENABLE DISCHARGE COMMAND START ===", self._device.name
+            )
+            self._log.warning(
+                "%s: Command bytes: %s",
+                self._device.name, self._CMD_ENABLE_DISCHARGE.hex()
+            )
             await self._connect()
             self._last_discharge_state = True
-            await self._await_reply(self._CMD_ENABLE_DISCHARGE, wait_for_notify=False)
-            self._log.warning("Discharge enabled successfully")
-            self._log.warning("=== ENABLE DISCHARGE COMMAND END ===")
+            await self._await_reply(
+                self._CMD_ENABLE_DISCHARGE, wait_for_notify=False
+            )
+            self._log.warning(
+                "%s: Discharge enabled successfully", self._device.name
+            )
+            self._log.warning(
+                "%s: === ENABLE DISCHARGE COMMAND END ===", self._device.name
+            )
             return True
         except Exception as err:
-            self._log.error("Failed to enable discharge: %s", err)
+            self._log.error(
+                "%s: Failed to enable discharge: %s", self._device.name, err
+            )
             return False
 
     async def disable_discharge(self) -> bool:
         """Disable battery discharge."""
         try:
-            self._log.warning("=== DISABLE DISCHARGE COMMAND START ===")
-            self._log.warning("Command bytes: %s", self._CMD_DISABLE_DISCHARGE.hex())
+            self._log.warning(
+                "%s: === DISABLE DISCHARGE COMMAND START ===",
+                self._device.name
+            )
+            self._log.warning(
+                "%s: Command bytes: %s",
+                self._device.name, self._CMD_DISABLE_DISCHARGE.hex()
+            )
             await self._connect()
             self._last_discharge_state = False
-            await self._await_reply(self._CMD_DISABLE_DISCHARGE, wait_for_notify=False)
-            self._log.warning("Discharge disabled successfully")
-            self._log.warning("=== DISABLE DISCHARGE COMMAND END ===")
+            await self._await_reply(
+                self._CMD_DISABLE_DISCHARGE, wait_for_notify=False
+            )
+            self._log.warning(
+                "%s: Discharge disabled successfully", self._device.name
+            )
+            self._log.warning(
+                "%s: === DISABLE DISCHARGE COMMAND END ===", self._device.name
+            )
             return True
         except Exception as err:
-            self._log.error("Failed to disable discharge: %s", err)
+            self._log.error(
+                "%s: Failed to disable discharge: %s", self._device.name, err
+            )
             return False
