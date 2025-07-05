@@ -1,0 +1,36 @@
+# Battery Protection Countdown Sensor
+# This creates a sensor that shows seconds remaining until the next battery protection automation cycle
+# The automation runs every minute, so this counts down from 60 seconds
+
+template:
+  - sensor:
+      - name: "Battery Protection Countdown"
+        unique_id: battery_protection_countdown
+        unit_of_measurement: "s"
+        device_class: duration
+        icon: mdi:timer-sand
+        state: >
+          {% set now_seconds = now().second %}
+          {{ 60 - now_seconds }}
+        attributes:
+          next_cycle: >
+            {% set now_time = now() %}
+            {% set next_minute = now_time.replace(second=0, microsecond=0) + timedelta(minutes=1) %}
+            {{ next_minute.strftime('%H:%M:%S') }}
+          current_time: >
+            {{ now().strftime('%H:%M:%S') }}
+
+# Automation to update the countdown sensor every second
+automation:
+  - id: battery_protection_countdown_updater
+    alias: "Battery Protection Countdown Updater"
+    description: "Updates the countdown sensor every second"
+    trigger:
+      - platform: time_pattern
+        seconds: "*"  # Run every second
+    action:
+      - service: homeassistant.update_entity
+        target:
+          entity_id: sensor.battery_protection_countdown
+    mode: single
+    max_exceeded: silent

@@ -82,8 +82,10 @@ automation:
               1
             {% elif total == 3 %}
               2
+            {% elif total == 4 %}
+              3
             {% else %}
-              {{ total - 3 }}
+              {{ total - 4 }}
             {% endif %}
 
           # Calculate the reason for min_discharging_count
@@ -95,8 +97,10 @@ automation:
               "Only {{ total }} batteries available - keep 1 discharging"
             {% elif total == 3 %}
               "{{ total }} batteries available - keep 2 discharging (minimum for safety)"
+            {% elif total == 4 %}
+              "{{ total }} batteries available - keep 3 discharging (minimum for safety)"
             {% else %}
-              "{{ total }} batteries available - keep {{ total - 3 }} discharging (turn off 3 lowest SOC)"
+              "{{ total }} batteries available - keep {{ total - 4 }} discharging (turn off 4 lowest SOC)"
             {% endif %}
           
           # Get sorted SOC values and determine lowest SOC batteries
@@ -108,12 +112,27 @@ automation:
             {% endfor %}
             {{ ns.soc_list | sort(attribute='soc') }}
           
-          # Determine which batteries should be turned off (lowest SOC ones)
+          # Determine which batteries should be turned off (lowest SOC ones, but not if SOC equals batteries staying ON)
           batteries_to_turn_off: >
             {% set total = valid_batteries | length %}
             {% set turn_off_count = total - min_discharging_count %}
             {% if turn_off_count > 0 %}
-              {{ sorted_soc_data[:turn_off_count] }}
+              {% set candidate_batteries = sorted_soc_data[:turn_off_count] %}
+              {% set batteries_staying_on = sorted_soc_data[turn_off_count:] %}
+              {% set ns = namespace(final_turnoff_list=[]) %}
+              {% for candidate in candidate_batteries %}
+                {% set candidate_soc = candidate.soc %}
+                {% set ns2 = namespace(soc_conflict=false) %}
+                {% for staying_on in batteries_staying_on %}
+                  {% if candidate_soc == staying_on.soc %}
+                    {% set ns2.soc_conflict = true %}
+                  {% endif %}
+                {% endfor %}
+                {% if not ns2.soc_conflict %}
+                  {% set ns.final_turnoff_list = ns.final_turnoff_list + [candidate] %}
+                {% endif %}
+              {% endfor %}
+              {{ ns.final_turnoff_list }}
             {% else %}
               []
             {% endif %}
@@ -164,6 +183,39 @@ automation:
               {% for battery in batteries_to_turn_off %}{{ battery.name }}={{ battery.soc }}%{% if not loop.last %}, {% endif %}{% endfor %}
             {% else %}
               None
+            {% endif %}
+          level: info
+
+      # Log batteries protected from turn-off due to SOC conflicts
+      - service: system_log.write
+        data:
+          message: >
+            SOC Conflict Protection: 
+            {% set total = valid_batteries | length %}
+            {% set turn_off_count = total - min_discharging_count %}
+            {% if turn_off_count > 0 %}
+              {% set candidate_batteries = sorted_soc_data[:turn_off_count] %}
+              {% set batteries_staying_on = sorted_soc_data[turn_off_count:] %}
+              {% set ns = namespace(protected_list=[]) %}
+              {% for candidate in candidate_batteries %}
+                {% set candidate_soc = candidate.soc %}
+                {% set ns2 = namespace(soc_conflict=false) %}
+                {% for staying_on in batteries_staying_on %}
+                  {% if candidate_soc == staying_on.soc %}
+                    {% set ns2.soc_conflict = true %}
+                  {% endif %}
+                {% endfor %}
+                {% if ns2.soc_conflict %}
+                  {% set ns.protected_list = ns.protected_list + [candidate.name + '=' + candidate.soc|string + '%'] %}
+                {% endif %}
+              {% endfor %}
+              {% if ns.protected_list | length > 0 %}
+                {{ ns.protected_list | join(', ') }} protected from turn-off (same SOC as batteries staying ON)
+              {% else %}
+                No batteries protected from turn-off due to SOC conflicts
+              {% endif %}
+            {% else %}
+              No turn-off candidates to evaluate
             {% endif %}
           level: info
 
@@ -236,84 +288,113 @@ automation:
       - condition: template
         value_template: "{{ valid_batteries | length >= 3 }}"
 
-      # Turn off discharging for batteries with lowest SOC
-      - repeat:
-          for_each: "{{ batteries_to_turn_off }}"
-          sequence:
-            - service: system_log.write
-              data:
-                message: "Battery Protection: Processing {{ repeat.item.name }} for TURN OFF (SOC: {{ repeat.item.soc }}%, Switch: {{ states(repeat.item.switch) }})"
-                level: info
-            - choose:
-                - conditions:
-                    - condition: and
-                      conditions:
-                        - condition: template
-                          value_template: "{{ is_state(repeat.item.switch, 'on') }}"
-                        - condition: template
-                          value_template: >
-                            {% set soc_val = repeat.item.soc | string %}
-                            {{ soc_val | is_number and soc_val not in ['unavailable', 'unknown'] }}
-                  sequence:
-                    - service: switch.turn_off
-                      target:
-                        entity_id: "{{ repeat.item.switch }}"
-                    - service: system_log.write
-                      data:
-                        message: "Battery Protection: ✓ TURNED OFF discharging for {{ repeat.item.name }} (SOC: {{ repeat.item.soc | string }}%) - REASON: Among {{ batteries_to_turn_off | length }} lowest SOC batteries"
-                        level: warning
-              default:
-                - service: system_log.write
-                  data:
-                    message: "Battery Protection: ✗ IGNORED turn OFF for {{ repeat.item.name }} - REASON: Conditions not met"
-                    level: info
-
-      # Turn on discharging for batteries that are not among the lowest SOC
-      - repeat:
-          for_each: "{{ valid_batteries }}"
-          sequence:
-            - variables:
-                is_low_soc_battery: >
-                  {% set ns = namespace(found=false) %}
-                  {% for low_battery in batteries_to_turn_off %}
-                    {% if low_battery.name == repeat.item.name %}
-                      {% set ns.found = true %}
-                    {% endif %}
-                  {% endfor %}
-                  {{ ns.found }}
-            - service: system_log.write
-              data:
-                message: "Battery Protection: Processing {{ repeat.item.name }} for TURN ON check (SOC: {{ states(repeat.item.soc) | string }}%, Switch: {{ states(repeat.item.switch) }}, IsLowSOC: {{ is_low_soc_battery }})"
-                level: info
-            - choose:
-                - conditions:
-                    - condition: and
-                      conditions:
-                        - condition: template
-                          value_template: "{{ is_state(repeat.item.switch, 'off') }}"
-                        - condition: template
-                          value_template: >
-                            {% set state_val = states(repeat.item.soc) | string %}
-                            {{ state_val | is_number and state_val not in ['unavailable', 'unknown'] }}
-                        - condition: template
-                          value_template: "{{ not is_low_soc_battery }}"
-                  sequence:
-                    - service: switch.turn_on
-                      target:
-                        entity_id: "{{ repeat.item.switch }}"
-                    - service: system_log.write
-                      data:
-                        message: "Battery Protection: ✓ TURNED ON discharging for {{ repeat.item.name }} (SOC: {{ states(repeat.item.soc) | string }}%) - REASON: Not in lowest SOC list, should be discharging"
-                        level: warning
-              default:
-                - service: system_log.write
-                  data:
-                    message: "Battery Protection: ✗ IGNORED turn ON for {{ repeat.item.name }} - REASON: Conditions not met"
-                    level: info
-
-      # If any battery is discharging (current > 0), turn ON all batteries whose discharging is OFF
+      # Check if any battery is currently charging (current > 0)
       - variables:
-          any_battery_discharging: >
+          any_battery_charging: >
+            {% set ns = namespace(active=false) %}
+            {% for battery in valid_batteries %}
+              {% set current_val = states(battery.current) | float(0) %}
+              {% if current_val > 0 %}
+                {% set ns.active = true %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.active }}
+
+      # Log if we're skipping turn-off logic due to active charging
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: "{{ any_battery_charging }}"
+            sequence:
+              - service: system_log.write
+                data:
+                  message: "Battery Protection: Skipping turn-off logic - at least one battery is actively charging (current > 0)"
+                  level: warning
+        default:
+          # Only proceed with turn-off logic if no batteries are charging
+          - service: system_log.write
+            data:
+              message: "Battery Protection: No batteries currently charging - proceeding with turn-off logic"
+              level: info
+
+          # Turn off discharging for batteries with lowest SOC
+          - repeat:
+              for_each: "{{ batteries_to_turn_off }}"
+              sequence:
+                - service: system_log.write
+                  data:
+                    message: "Battery Protection: Processing {{ repeat.item.name }} for TURN OFF (SOC: {{ repeat.item.soc }}%, Switch: {{ states(repeat.item.switch) }})"
+                    level: info
+                - choose:
+                    - conditions:
+                        - condition: and
+                          conditions:
+                            - condition: template
+                              value_template: "{{ is_state(repeat.item.switch, 'on') }}"
+                            - condition: template
+                              value_template: >
+                                {% set soc_val = repeat.item.soc | string %}
+                                {{ soc_val | is_number and soc_val not in ['unavailable', 'unknown'] }}
+                      sequence:
+                        - service: switch.turn_off
+                          target:
+                            entity_id: "{{ repeat.item.switch }}"
+                        - service: system_log.write
+                          data:
+                            message: "Battery Protection: ✓ TURNED OFF discharging for {{ repeat.item.name }} (SOC: {{ repeat.item.soc | string }}%) - REASON: Among {{ batteries_to_turn_off | length }} lowest SOC batteries"
+                            level: warning
+                  default:
+                    - service: system_log.write
+                      data:
+                        message: "Battery Protection: ✗ IGNORED turn OFF for {{ repeat.item.name }} - REASON: Conditions not met"
+                        level: info
+
+          # Turn on discharging for batteries that are not among the lowest SOC
+          - repeat:
+              for_each: "{{ valid_batteries }}"
+              sequence:
+                - variables:
+                    is_low_soc_battery: >
+                      {% set ns = namespace(found=false) %}
+                      {% for low_battery in batteries_to_turn_off %}
+                        {% if low_battery.name == repeat.item.name %}
+                          {% set ns.found = true %}
+                        {% endif %}
+                      {% endfor %}
+                      {{ ns.found }}
+                - service: system_log.write
+                  data:
+                    message: "Battery Protection: Processing {{ repeat.item.name }} for TURN ON check (SOC: {{ states(repeat.item.soc) | string }}%, Switch: {{ states(repeat.item.switch) }}, IsLowSOC: {{ is_low_soc_battery }})"
+                    level: info
+                - choose:
+                    - conditions:
+                        - condition: and
+                          conditions:
+                            - condition: template
+                              value_template: "{{ is_state(repeat.item.switch, 'off') }}"
+                            - condition: template
+                              value_template: >
+                                {% set state_val = states(repeat.item.soc) | string %}
+                                {{ state_val | is_number and state_val not in ['unavailable', 'unknown'] }}
+                            - condition: template
+                              value_template: "{{ not is_low_soc_battery }}"
+                      sequence:
+                        - service: switch.turn_on
+                          target:
+                            entity_id: "{{ repeat.item.switch }}"
+                        - service: system_log.write
+                          data:
+                            message: "Battery Protection: ✓ TURNED ON discharging for {{ repeat.item.name }} (SOC: {{ states(repeat.item.soc) | string }}%) - REASON: Not in lowest SOC list, should be discharging"
+                            level: warning
+                  default:
+                    - service: system_log.write
+                      data:
+                        message: "Battery Protection: ✗ IGNORED turn ON for {{ repeat.item.name }} - REASON: Conditions not met"
+                        level: info
+
+      # If any battery is charging (current > 0), turn ON all batteries whose discharging is OFF
+      - variables:
+          any_battery_charging_for_switch_management: >
             {% set ns = namespace(active=false) %}
             {% for battery in valid_batteries %}
               {% set current_val = states(battery.current) | float(0) %}
@@ -325,11 +406,11 @@ automation:
       - choose:
           - conditions:
               - condition: template
-                value_template: "{{ any_battery_discharging }}"
+                value_template: "{{ any_battery_charging_for_switch_management }}"
             sequence:
               - service: system_log.write
                 data:
-                  message: "Battery Protection: At least one battery is discharging (current > 0). Turning ON all batteries whose discharging is OFF."
+                  message: "Battery Protection: At least one battery is charging (current > 0). Turning ON all batteries whose discharging is OFF."
                   level: warning
               - repeat:
                   for_each: "{{ valid_batteries }}"
