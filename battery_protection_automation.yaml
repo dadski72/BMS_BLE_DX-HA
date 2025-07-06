@@ -407,10 +407,12 @@ automation:
           - conditions:
               - condition: template
                 value_template: "{{ any_battery_charging_for_switch_management }}"
+              - condition: template
+                value_template: "{{ states('sensor.solar_pv_combine') | float(0) >= 50 }}"
             sequence:
               - service: system_log.write
                 data:
-                  message: "Battery Protection: At least one battery is charging (current > 0). Turning ON all batteries whose discharging is OFF."
+                  message: "Battery Protection: At least one battery is charging (current > 0) and solar PV >= 50W. Turning ON all batteries whose discharging is OFF."
                   level: warning
               - repeat:
                   for_each: "{{ valid_batteries }}"
@@ -424,6 +426,13 @@ automation:
                       data:
                         message: "Battery Protection: ✓ TURNED ON discharging for {{ repeat.item.name }} due to current > 0 in another battery."
                         level: warning
+        default:
+          - condition: template
+            value_template: "{{ any_battery_charging_for_switch_management }}"
+          - service: system_log.write
+            data:
+              message: "Battery Protection: Charging detected but solar PV ({{ states('sensor.solar_pv_combine') | float(0) }}W) < 50W. Not turning on all batteries."
+              level: info
 
       # Solar inverter management based on average SOC (only if we have valid data)
       - choose:
