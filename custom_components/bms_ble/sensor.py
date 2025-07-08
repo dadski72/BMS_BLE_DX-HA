@@ -78,12 +78,7 @@ SENSOR_TYPES: Final[list[BmsEntityDescription]] = [
         native_unit_of_measurement=PERCENTAGE,
         state_class=SensorStateClass.MEASUREMENT,
         device_class=SensorDeviceClass.BATTERY,
-        suggested_display_precision=2,
-        value_fn=lambda data: (
-            round(data.get("battery_level", 0), 2)
-            if data.get("battery_level") is not None
-            else None
-        ),
+        value_fn=lambda data: data.get("battery_level"),
         attr_fn=lambda data: _attr_pack(data, "pack_battery_levels", [0.0]),
     ),
     BmsEntityDescription(

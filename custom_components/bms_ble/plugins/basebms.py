@@ -245,7 +245,7 @@ class BaseBMS(ABC):
                 {"design_capacity", "cycle_charge"},
                 lambda: round(
                     data.get("cycle_charge", 0) * data.get("design_capacity", 0) / 100,
-                    2,
+                    1,
                 ),
             ),
             "cycle_capacity": (
