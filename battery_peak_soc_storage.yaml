@@ -1,0 +1,147 @@
+# Battery Peak SOC Storage Configuration
+# This file creates input_number helpers to store the highest SOC value
+# reached by each battery for improved battery protection logic
+# 
+# These helpers need to be included in your Home Assistant configuration.yaml:
+# input_number: !include battery_peak_soc_storage.yaml
+#
+# Or added manually via the UI under Settings > Devices & Services > Helpers
+
+input_number:
+  # Peak SOC storage for each battery
+  # Note: You may need to add/remove entries based on your actual battery names
+  # The automation will create these automatically when it runs, but having them
+  # predefined ensures they persist through restarts
+  
+  battery_r1_peak_soc:
+    name: "Battery R1 Peak SOC"
+    min: 0
+    max: 100
+    step: 0.1
+    unit_of_measurement: "%"
+    icon: mdi:battery-high
+    
+  battery_r2_peak_soc:
+    name: "Battery R2 Peak SOC"
+    min: 0
+    max: 100
+    step: 0.1
+    unit_of_measurement: "%"
+    icon: mdi:battery-high
+    
+  battery_r3_peak_soc:
+    name: "Battery R3 Peak SOC"
+    min: 0
+    max: 100
+    step: 0.1
+    unit_of_measurement: "%"
+    icon: mdi:battery-high
+    
+  battery_r4_peak_soc:
+    name: "Battery R4 Peak SOC"
+    min: 0
+    max: 100
+    step: 0.1
+    unit_of_measurement: "%"
+    icon: mdi:battery-high
+    
+  battery_z1_peak_soc:
+    name: "Battery Z1 Peak SOC"
+    min: 0
+    max: 100
+    step: 0.1
+    unit_of_measurement: "%"
+    icon: mdi:battery-high
+    
+  battery_z2_peak_soc:
+    name: "Battery Z2 Peak SOC"
+    min: 0
+    max: 100
+    step: 0.1
+    unit_of_measurement: "%"
+    icon: mdi:battery-high
+    
+  battery_z3_peak_soc:
+    name: "Battery Z3 Peak SOC"
+    min: 0
+    max: 100
+    step: 0.1
+    unit_of_measurement: "%"
+    icon: mdi:battery-high
+    
+  battery_z4_peak_soc:
+    name: "Battery Z4 Peak SOC"
+    min: 0
+    max: 100
+    step: 0.1
+    unit_of_measurement: "%"
+    icon: mdi:battery-high
+
+  # Previous SOC storage for each battery (for trend analysis)
+  battery_r1_previous_soc:
+    name: "Battery R1 Previous SOC"
+    min: 0
+    max: 100
+    step: 0.1
+    unit_of_measurement: "%"
+    icon: mdi:battery-clock
+    
+  battery_r2_previous_soc:
+    name: "Battery R2 Previous SOC"
+    min: 0
+    max: 100
+    step: 0.1
+    unit_of_measurement: "%"
+    icon: mdi:battery-clock
+    
+  battery_r3_previous_soc:
+    name: "Battery R3 Previous SOC"
+    min: 0
+    max: 100
+    step: 0.1
+    unit_of_measurement: "%"
+    icon: mdi:battery-clock
+    
+  battery_r4_previous_soc:
+    name: "Battery R4 Previous SOC"
+    min: 0
+    max: 100
+    step: 0.1
+    unit_of_measurement: "%"
+    icon: mdi:battery-clock
+    
+  battery_z1_previous_soc:
+    name: "Battery Z1 Previous SOC"
+    min: 0
+    max: 100
+    step: 0.1
+    unit_of_measurement: "%"
+    icon: mdi:battery-clock
+    
+  battery_z2_previous_soc:
+    name: "Battery Z2 Previous SOC"
+    min: 0
+    max: 100
+    step: 0.1
+    unit_of_measurement: "%"
+    icon: mdi:battery-clock
+    
+  battery_z3_previous_soc:
+    name: "Battery Z3 Previous SOC"
+    min: 0
+    max: 100
+    step: 0.1
+    unit_of_measurement: "%"
+    icon: mdi:battery-clock
+    
+  battery_z4_previous_soc:
+    name: "Battery Z4 Previous SOC"
+    min: 0
+    max: 100
+    step: 0.1
+    unit_of_measurement: "%"
+    icon: mdi:battery-clock
+
+  # Add more batteries as needed following the pattern:
+  # battery_[name]_peak_soc where [name] matches your actual battery naming pattern
+  # The automation automatically discovers batteries with pattern: sensor.dadski_battery_[a-z][0-9]+_soc

@@ -1,0 +1,28 @@
+# Battery Peak SOC Reset Script
+# This script can be called manually to reset all stored peak SOC values
+# Add this to your Home Assistant configuration or create it via the UI
+
+script:
+  reset_battery_peak_soc:
+    alias: "Reset Battery Peak SOC Values"
+    description: "Manually reset all stored peak SOC values to current battery SOC levels"
+    icon: mdi:battery-sync
+    mode: single
+    sequence:
+      - service: system_log.write
+        data:
+          message: "Manual Battery Peak SOC Reset: Starting manual reset of all peak SOC values"
+          level: warning
+      
+      - event: battery_peak_soc_reset
+        event_data:
+          triggered_by: manual
+          timestamp: "{{ now().isoformat() }}"
+
+      - service: system_log.write
+        data:
+          message: "Manual Battery Peak SOC Reset: Reset event triggered successfully"
+          level: info
+
+# Service call example:
+# service: script.reset_battery_peak_soc
