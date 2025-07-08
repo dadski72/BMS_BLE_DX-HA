@@ -93,12 +93,12 @@ automation:
             {% endfor %}
             {{ ns.soc_list | sort(attribute='soc') }}
           
-          # Determine which batteries should be turned off (SOC <= highest_soc - 1)
+          # Determine which batteries should be turned off (SOC <= highest_soc - 2)
           batteries_to_turn_off: >
             {% set ns = namespace(turnoff_list=[]) %}
             {% for battery in valid_batteries %}
               {% set soc_val = states(battery.soc) | float %}
-              {% if soc_val <= (highest_soc - 1) %}
+              {% if soc_val <= (highest_soc - 2) %}
                 {% set ns.turnoff_list = ns.turnoff_list + [{'name': battery.name, 'soc': soc_val, 'switch': battery.switch}] %}
               {% endif %}
             {% endfor %}
@@ -142,7 +142,7 @@ automation:
       # Log the new logic reasoning
       - service: system_log.write
         data:
-          message: "Battery Protection Logic: Turn OFF batteries with SOC <= {{ highest_soc - 1 }}%, Turn ON batteries with SOC >= {{ highest_soc }}%"
+          message: "Battery Protection Logic: Turn OFF batteries with SOC <= {{ highest_soc - 2 }}%, Turn ON batteries with SOC >= {{ highest_soc }}%"
           level: info
 
       # Log sorted battery data for debugging
@@ -157,7 +157,7 @@ automation:
       - service: system_log.write
         data:
           message: >
-            Batteries marked for turn OFF (SOC <= {{ highest_soc - 1 }}%): 
+            Batteries marked for turn OFF (SOC <= {{ highest_soc - 2 }}%): 
             {% if batteries_to_turn_off | length > 0 %}
               {% for battery in batteries_to_turn_off %}{{ battery.name }}={{ battery.soc }}%{% if not loop.last %}, {% endif %}{% endfor %}
             {% else %}
@@ -202,7 +202,7 @@ automation:
                   {{ ns.found }}
                 planned_action: >
                   {% set soc = states(repeat.item.soc) | float %}
-                  {% if soc <= (highest_soc - 1) %}
+                  {% if soc <= (highest_soc - 2) %}
                     {% if is_state(repeat.item.switch, 'on') %}
                       TURN_OFF
                     {% else %}
@@ -223,12 +223,12 @@ automation:
                   {% endif %}
                 decision_reason: >
                   {% set soc = states(repeat.item.soc) | float %}
-                  {% if soc <= (highest_soc - 1) %}
-                    "SOC {{ soc }}% <= {{ highest_soc - 1 }}% (highest - 1) - should be OFF"
+                  {% if soc <= (highest_soc - 2) %}
+                    "SOC {{ soc }}% <= {{ highest_soc - 2 }}% (highest - 2) - should be OFF"
                   {% elif soc >= highest_soc %}
                     "SOC {{ soc }}% >= {{ highest_soc }}% (highest) - should be ON"
                   {% else %}
-                    "SOC {{ soc }}% is between {{ highest_soc - 1 }}% and {{ highest_soc }}% - no change"
+                    "SOC {{ soc }}% is between {{ highest_soc - 2 }}% and {{ highest_soc }}% - no change"
                   {% endif %}
             - service: system_log.write
               data:
@@ -298,7 +298,7 @@ automation:
                             entity_id: "{{ repeat.item.switch }}"
                         - service: system_log.write
                           data:
-                            message: "Battery Protection: ✓ TURNED OFF discharging for {{ repeat.item.name }} (SOC: {{ repeat.item.soc | string }}%) - REASON: SOC <= {{ highest_soc - 1 }}% (highest - 1)"
+                            message: "Battery Protection: ✓ TURNED OFF discharging for {{ repeat.item.name }} (SOC: {{ repeat.item.soc | string }}%) - REASON: SOC <= {{ highest_soc - 2 }}% (highest - 2)"
                             level: warning
                   default:
                     - service: system_log.write
