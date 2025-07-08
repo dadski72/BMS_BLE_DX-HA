@@ -338,7 +338,7 @@ automation:
                         message: "Battery Protection: ✗ IGNORED turn ON for {{ repeat.item.name }} - REASON: Conditions not met"
                         level: info
 
-      # If any battery is charging (current > 0), turn ON all batteries whose discharging is OFF
+      # Enhanced battery charging management with balancing detection to prevent oscillation
       - variables:
           any_battery_charging_for_switch_management: >
             {% set ns = namespace(active=false) %}
@@ -349,16 +349,44 @@ automation:
               {% endif %}
             {% endfor %}
             {{ ns.active }}
+          
+          battery_balancing_active: >
+            {% set ns = namespace(charging=0, discharging=0) %}
+            {% for battery in valid_batteries %}
+              {% set current = states(battery.current) | float(0) %}
+              {% if current > 0.5 %}
+                {% set ns.charging = ns.charging + 1 %}
+              {% elif current < -0.5 %}
+                {% set ns.discharging = ns.discharging + 1 %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.charging > 0 and ns.discharging > 0 and states('sensor.solar_pv_combine') | float(0) < 10 }}
+          
+          external_charging_active: >
+            {% set solar_pv = states('sensor.solar_pv_combine') | float(0) %}
+            {{ any_battery_charging_for_switch_management and solar_pv >= 50 }}
+          
+          soc_spread: >
+            {% set ns = namespace(soc_values=[]) %}
+            {% for battery in valid_batteries %}
+              {% set soc_val = states(battery.soc) | float(0) %}
+              {% set ns.soc_values = ns.soc_values + [soc_val] %}
+            {% endfor %}
+            {% if ns.soc_values | length > 0 %}
+              {{ (ns.soc_values | max) - (ns.soc_values | min) }}
+            {% else %}
+              0
+            {% endif %}
+
       - choose:
+          # External charging detected (solar >= 50W) - turn on all batteries
           - conditions:
               - condition: template
-                value_template: "{{ any_battery_charging_for_switch_management }}"
-              - condition: template
-                value_template: "{{ states('sensor.solar_pv_combine') | float(0) >= 50 }}"
+                value_template: "{{ external_charging_active }}"
             sequence:
               - service: system_log.write
                 data:
-                  message: "Battery Protection: At least one battery is charging (current > 0) and solar PV >= 50W. Turning ON all batteries whose discharging is OFF."
+                  message: "Battery Protection: External charging detected (solar: {{ states('sensor.solar_pv_combine') | float(0) }}W). Turning ON all batteries."
                   level: warning
               - repeat:
                   for_each: "{{ valid_batteries }}"
@@ -370,34 +398,18 @@ automation:
                         entity_id: "{{ repeat.item.switch }}"
                     - service: system_log.write
                       data:
-                        message: "Battery Protection: ✓ TURNED ON discharging for {{ repeat.item.name }} due to current > 0 in another battery."
+                        message: "Battery Protection: ✓ TURNED ON {{ repeat.item.name }} - external charging detected"
                         level: warning
-        default:
-          - condition: template
-            value_template: "{{ any_battery_charging_for_switch_management }}"
-          - condition: template
-            value_template: "{{ states('sensor.solar_pv_combine') | float(0) <= 50 }}"
-          - service: system_log.write
-            data:
-              message: "Battery Protection: Charging detected but solar PV ({{ states('sensor.solar_pv_combine') | float(0) }}W) <= 50W. Turning OFF other batteries that are discharging AND have SOC <= {{ highest_soc - 1 }}%."
-              level: warning
-          - repeat:
-              for_each: "{{ valid_batteries }}"
-              sequence:
-                - variables:
-                    battery_current: "{{ states(repeat.item.current) | float(0) }}"
-                    battery_soc: "{{ states(repeat.item.soc) | float }}"
-                    is_charging: "{{ battery_current > 0 }}"
-                    should_be_off_due_to_soc: "{{ battery_soc <= (highest_soc - 1) }}"
-                - condition: template
-                  value_template: "{{ not is_charging and is_state(repeat.item.switch, 'on') and should_be_off_due_to_soc }}"
-                - service: switch.turn_off
-                  target:
-                    entity_id: "{{ repeat.item.switch }}"
-                - service: system_log.write
-                  data:
-                    message: "Battery Protection: ✓ TURNED OFF discharging for {{ repeat.item.name }} (SOC: {{ battery_soc }}%) due to charging detected while solar PV <= 50W AND SOC <= {{ highest_soc - 1 }}%."
-                    level: warning
+
+          # Battery balancing detected - maintain current state to prevent oscillation
+          - conditions:
+              - condition: template
+                value_template: "{{ battery_balancing_active }}"
+            sequence:
+              - service: system_log.write
+                data:
+                  message: "Battery Protection: Battery balancing detected (SOC spread: {{ soc_spread }}%, solar: {{ states('sensor.solar_pv_combine') | float(0) }}W). Maintaining current switch states to prevent oscillation."
+                  level: warning
 
       # Solar inverter management based on average SOC (only if we have valid data)
       - choose:
