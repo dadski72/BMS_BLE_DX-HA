@@ -162,10 +162,10 @@ class BMS(BaseBMS):
 
         # Log raw data for debugging discharge state
         discharge_byte = self._data[68]
-        # self._log.warning(
-        #     "%s: Raw byte at offset 68 (discharge state): (%d)",
-        #     self.name, discharge_byte
-        # )
+        self._log.warning(
+            "%s: Raw byte at offset 68 (discharge state): (%d)",
+            self.name, discharge_byte
+        )
 
         # Redodo-specific logic: if raw value is 8 or 12, discharge is OFF
         current_state = discharge_byte not in (0x80, 12)

@@ -213,7 +213,7 @@ class BMS(BaseBMS):
         if len(self._data_final) <= 21 + 4:
             return self._last_discharge_state  # Return last known state
 
-        hex_bytes = " ".join(f"0x{b:02x}" for b in self._data_final)
+        # hex_bytes = " ".join(f"0x{b:02x}" for b in self._data_final)
         # self._log.warning("%s: bytes received:%s", self.name, hex_bytes)
 
         discharge_byte = self._data_final[4 + 20]  # Get the byte directly
