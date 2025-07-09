@@ -81,7 +81,7 @@ class BTBmsDischargeSwitch(CoordinatorEntity[BTBmsCoordinator], SwitchEntity):
         discharge_state = self.coordinator.data.get(
             "battery_discharging_state"
         )
-        LOGGER.info(
+        LOGGER.debug(
             "Switch is_on: battery_discharging_state = %s (type: %s)",
             discharge_state, type(discharge_state)
         )
