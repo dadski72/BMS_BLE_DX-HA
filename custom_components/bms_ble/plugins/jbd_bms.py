@@ -259,8 +259,8 @@ class BMS(BaseBMS):
             await self._await_reply(
                 self._CMD_ENABLE_DISCHARGE, wait_for_notify=True
             )
-            # self._log.warning("%s: Discharge enabled successfully", self.name)
-            # self._log.warning(
+            self._log.warning("%s: Discharge enabled successfully", self.name)
+            #self._log.warning(
             #     "%s: === JBD ENABLE DISCHARGE COMMAND END ===", self.name
             # )
             return True
@@ -285,7 +285,7 @@ class BMS(BaseBMS):
             await self._await_reply(
                 self._CMD_DISABLE_DISCHARGE, wait_for_notify=True
             )
-            # self._log.warning("%s: Discharge disabled successfully", self.name)
+            self._log.warning("%s: Discharge disabled successfully", self.name)
             # self._log.warning(
             #     "%s: === JBD DISABLE DISCHARGE COMMAND END ===", self.name
             # )

@@ -196,7 +196,7 @@ class BMS(BaseBMS):
             # self._log.warning(
             #     "%s: === ENABLE DISCHARGE COMMAND START ===", self.name
             # )
-            # self._log.warning(
+            # # self._log.warning(
             #     "%s: Command bytes: %s",
             #     self.name, self._CMD_ENABLE_DISCHARGE.hex()
             # )
@@ -205,9 +205,9 @@ class BMS(BaseBMS):
             await self._await_reply(
                 self._CMD_ENABLE_DISCHARGE, wait_for_notify=True
             )
-            # self._log.warning(
-            #     "%s: Discharge enabled successfully", self.name
-            # )
+            self._log.warning(
+                "%s: Discharge enabled successfully", self.name
+            )
             # self._log.warning(
             #     "%s: === ENABLE DISCHARGE COMMAND END ===", self.name
             # )
@@ -234,9 +234,9 @@ class BMS(BaseBMS):
             await self._await_reply(
                 self._CMD_DISABLE_DISCHARGE, wait_for_notify=True
             )
-            # self._log.warning(
-            #     "%s: Discharge disabled successfully", self.name
-            # )
+            self._log.warning(
+                "%s: Discharge disabled successfully", self.name
+            )
             # self._log.warning(
             #     "%s: === DISABLE DISCHARGE COMMAND END ===", self.name
             # )

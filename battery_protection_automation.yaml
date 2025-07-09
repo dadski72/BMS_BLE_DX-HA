@@ -103,8 +103,8 @@ automation:
               {% set prev_entity = 'input_number.battery_' + battery.name + '_previous_soc' %}
               {% set stored_peak = states(peak_entity) | float(0) %}
               {% set previous_soc = states(prev_entity) | float(current_soc) %}
-              {# Initialize stored_peak to highest_soc if it's 0 (first run) OR if automation just started (reset) #}
-              {% set initial_peak = highest_soc if (stored_peak == 0 or automation_just_started) else stored_peak %}
+              {# Initialize stored_peak to highest_soc if it's 0 (first run) OR use current_soc if automation just started (reset) #}
+              {% set initial_peak = highest_soc if stored_peak == 0 else (current_soc if automation_just_started else stored_peak) %}
               {% set new_peak = [current_soc, initial_peak] | max %}
               {% set soc_increasing = current_soc > previous_soc %}
               {% set soc_decreasing = current_soc < previous_soc %}
@@ -135,8 +135,8 @@ automation:
               {% set current_soc = states(battery.soc) | float %}
               {% set peak_entity = 'input_number.battery_' + battery.name + '_peak_soc' %}
               {% set stored_peak = states(peak_entity) | float(0) %}
-              {# Initialize stored_peak to highest_soc if it's 0 (first run) OR if automation just started (reset) #}
-              {% set initial_peak = highest_soc if (stored_peak == 0 or automation_just_started) else stored_peak %}
+              {# Initialize stored_peak to highest_soc if it's 0 (first run) OR use current_soc if automation just started (reset) #}
+              {% set initial_peak = highest_soc if stored_peak == 0 else (current_soc if automation_just_started else stored_peak) %}
               {# Always use the individual battery's peak SOC as reference #}
               {% set reference_soc = initial_peak %}
               {# Only add to turn-off list if SOC is low AND we have more than 1 battery currently on #}
@@ -145,28 +145,6 @@ automation:
               {% endif %}
             {% endfor %}
             {{ ns.turnoff_list }}
-
-      # DEBUG: Log detailed battery turn-off calculation
-      - service: system_log.write
-        data:
-          message: >
-            Battery Protection: DEBUG - Turn-off calculation details:
-            {% for battery in valid_batteries %}
-              {% set current_soc = states(battery.soc) | float %}
-              {% set peak_entity = 'input_number.battery_' + battery.name + '_peak_soc' %}
-              {% set stored_peak = states(peak_entity) | float(0) %}
-              {% set initial_peak = highest_soc if (stored_peak == 0 or automation_just_started) else stored_peak %}
-              {% set reference_soc = initial_peak %}
-              {% set batteries_currently_on = [] %}
-              {% for bat in valid_batteries %}
-                {% if is_state(bat.switch, 'on') %}
-                  {% set batteries_currently_on = batteries_currently_on + [bat.name] %}
-                {% endif %}
-              {% endfor %}
-              {% set condition_met = current_soc <= (reference_soc - 2) and batteries_currently_on | length > 1 %}
-              {{ battery.name }}(SOC:{{ current_soc }}%,Peak:{{ initial_peak }}%,Ref:{{ reference_soc }}%,Threshold:{{ reference_soc - 2 }}%,Switch:{{ states(battery.switch) }},BattOn:{{ batteries_currently_on | length }},Condition:{{ condition_met }}){% if not loop.last %}, {% endif %}
-            {% endfor %}
-          level: warning
           
           # Determine which batteries should be turned on (SOC >= highest_soc)
           batteries_to_turn_on: >
@@ -190,6 +168,51 @@ automation:
             {% else %}
               0
             {% endif %}
+          
+          # Get count of batteries currently on (for debug logging)
+          batteries_currently_on_count: >
+            {% set ns = namespace(count=0) %}
+            {% for battery in valid_batteries %}
+              {% if is_state(battery.switch, 'on') %}
+                {% set ns.count = ns.count + 1 %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.count }}
+          
+          # Get list of batteries currently on names (for debug logging)
+          batteries_currently_on_names: >
+            {% set ns = namespace(names=[]) %}
+            {% for battery in valid_batteries %}
+              {% if is_state(battery.switch, 'on') %}
+                {% set ns.names = ns.names + [battery.name] %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.names }}
+
+      # DEBUG: Log battery switch states and count
+      - service: system_log.write
+        data:
+          message: >
+            Battery Protection: DEBUG - Battery switch states: 
+            {% for battery in valid_batteries %}{{ battery.name }}={{ states(battery.switch) }}{% if not loop.last %}, {% endif %}{% endfor %}
+            | Batteries ON count: {{ batteries_currently_on_count }} | Batteries ON names: {{ batteries_currently_on_names | join(', ') }}
+          level: warning
+
+      # DEBUG: Log detailed battery turn-off calculation
+      - service: system_log.write
+        data:
+          message: >
+            Battery Protection: DEBUG - Turn-off calculation details:
+            {% for battery in valid_batteries %}
+              {% set current_soc = states(battery.soc) | float %}
+              {% set peak_entity = 'input_number.battery_' + battery.name + '_peak_soc' %}
+              {% set stored_peak = states(peak_entity) | float(0) %}
+              {% set initial_peak = highest_soc if stored_peak == 0 else (current_soc if automation_just_started else stored_peak) %}
+              {% set reference_soc = initial_peak %}
+              {% set condition_met = current_soc <= (reference_soc - 2) and batteries_currently_on_count > 1 %}
+              {{ battery.name }}(SOC:{{ current_soc }}%,Peak:{{ initial_peak }}%,Ref:{{ reference_soc }}%,Threshold:{{ reference_soc - 2 }}%,Switch:{{ states(battery.switch) }},BattOn:{{ batteries_currently_on_count }},Condition:{{ condition_met }}){% if not loop.last %}, {% endif %}
+            {% endfor %}
+          level: warning
 
       # Update stored peak SOC values and previous SOC values for each battery
       - repeat:
@@ -308,7 +331,7 @@ automation:
                 {% set current_soc = states(battery.soc) | float %}
                 {% set peak_entity = 'input_number.battery_' + battery.name + '_peak_soc' %}
                 {% set stored_peak = states(peak_entity) | float(0) %}
-                {% set initial_peak = highest_soc if (stored_peak == 0 or automation_just_started) else stored_peak %}
+                {% set initial_peak = highest_soc if stored_peak == 0 else (current_soc if automation_just_started else stored_peak) %}
                 {% set reference_soc = initial_peak %}
                 {% set batteries_currently_on = [] %}
                 {% for bat in valid_batteries %}
@@ -351,11 +374,12 @@ automation:
                 battery_peak_soc: "{{ states('input_number.battery_' + repeat.item.name + '_peak_soc') | float(0) }}"
                 battery_initial_peak: >
                   {% set stored_peak = states('input_number.battery_' + repeat.item.name + '_peak_soc') | float(0) %}
-                  {{ highest_soc if (stored_peak == 0 or automation_just_started) else stored_peak }}
+                  {% set current_soc = states(repeat.item.soc) | float %}
+                  {{ highest_soc if stored_peak == 0 else (current_soc if automation_just_started else stored_peak) }}
                 reference_soc_for_turnoff: >
                   {% set current_soc = states(repeat.item.soc) | float %}
                   {% set stored_peak = states('input_number.battery_' + repeat.item.name + '_peak_soc') | float(0) %}
-                  {% set initial_peak = highest_soc if (stored_peak == 0 or automation_just_started) else stored_peak %}
+                  {% set initial_peak = highest_soc if stored_peak == 0 else (current_soc if automation_just_started else stored_peak) %}
                   {{ initial_peak }}
                 is_in_turnoff_list: >
                   {% set ns = namespace(found=false) %}
@@ -399,7 +423,7 @@ automation:
                   {% set soc = states(repeat.item.soc) | float %}
                   {% set ref_soc = reference_soc_for_turnoff | float %}
                   {% set stored_peak = states('input_number.battery_' + repeat.item.name + '_peak_soc') | float(0) %}
-                  {% set initial_peak = highest_soc if (stored_peak == 0 or automation_just_started) else stored_peak %}
+                  {% set initial_peak = highest_soc if stored_peak == 0 else (soc if automation_just_started else stored_peak) %}
                   {% if soc <= (ref_soc - 2) %}
                     {% if stored_peak == 0 %}
                       "SOC {{ soc }}% <= {{ ref_soc - 2 }}% (initialized peak {{ initial_peak }}% - 2) - should be OFF"
@@ -471,6 +495,10 @@ automation:
                     level: warning
                 - service: system_log.write
                   data:
+                    message: "Battery Protection: DEBUG - Switch {{ repeat.item.switch }} attributes: {{ state_attr(repeat.item.switch, 'friendly_name') }}, available: {{ not is_state(repeat.item.switch, 'unavailable') }}"
+                    level: warning
+                - service: system_log.write
+                  data:
                     message: "Battery Protection: DEBUG - Conditions for {{ repeat.item.name }}: is_state='{{ is_state(repeat.item.switch, 'on') }}', soc_valid='{{ repeat.item.soc | string | is_number }}', soc_not_unavailable='{{ repeat.item.soc | string not in ['unavailable', 'unknown'] }}'"
                     level: warning
                 - choose:
@@ -495,6 +523,32 @@ automation:
                           data:
                             message: "Battery Protection: ✓ TURNED OFF discharging for {{ repeat.item.name }} (SOC: {{ repeat.item.soc | string }}%) - REASON: SOC <= {{ repeat.item.reference_soc - 2 }}% (reference {{ repeat.item.reference_soc }}% - 2, peak: {{ repeat.item.peak_soc }}%)"
                             level: warning
+                        # Wait a moment and check if the switch actually turned off
+                        - delay:
+                            seconds: 2
+                        - service: system_log.write
+                          data:
+                            message: "Battery Protection: DEBUG - After turn-off command, {{ repeat.item.name }} switch state is now: {{ states(repeat.item.switch) }}"
+                            level: warning
+                        # If switch is still on, try turning it off again
+                        - choose:
+                            - conditions:
+                                - condition: template
+                                  value_template: "{{ is_state(repeat.item.switch, 'on') }}"
+                              sequence:
+                                - service: system_log.write
+                                  data:
+                                    message: "Battery Protection: WARNING - {{ repeat.item.name }} switch turned back ON after turn-off command! Attempting second turn-off..."
+                                    level: warning
+                                - service: switch.turn_off
+                                  target:
+                                    entity_id: "{{ repeat.item.switch }}"
+                                - delay:
+                                    seconds: 2
+                                - service: system_log.write
+                                  data:
+                                    message: "Battery Protection: DEBUG - After second turn-off attempt, {{ repeat.item.name }} switch state is: {{ states(repeat.item.switch) }}"
+                                    level: warning
                   default:
                     - service: system_log.write
                       data:
@@ -649,6 +703,14 @@ automation:
             data:
               message: "Battery Protection: Skipping inverter management - insufficient valid battery data ({{ valid_batteries | length }}/{{ batteries | length }} batteries available)"
               level: warning
+
+      # Final debug log to show the state of all switches after all actions
+      - service: system_log.write
+        data:
+          message: >
+            Battery Protection: FINAL SWITCH STATES after automation run: 
+            {% for battery in valid_batteries %}{{ battery.name }}={{ states(battery.switch) }}{% if not loop.last %}, {% endif %}{% endfor %}
+          level: warning
 
     mode: single
     max_exceeded: silent
