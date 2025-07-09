@@ -168,7 +168,7 @@ class BMS(BaseBMS):
         )
 
         # Redodo-specific logic: if raw value is 8 or 12, discharge is OFF
-        current_state = discharge_byte not in (0x80, 12)
+        current_state = discharge_byte not in (0x80, 0xC8)
         self._last_discharge_state = current_state  # Store current state
         # self._log.warning(
         #     "%s: discharge state:%s  discharge_byte:%d",
