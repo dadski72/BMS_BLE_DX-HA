@@ -137,14 +137,36 @@ automation:
               {% set stored_peak = states(peak_entity) | float(0) %}
               {# Initialize stored_peak to highest_soc if it's 0 (first run) OR if automation just started (reset) #}
               {% set initial_peak = highest_soc if (stored_peak == 0 or automation_just_started) else stored_peak %}
-              {# Use initial_peak if it's greater than current SOC, otherwise use current highest SOC #}
-              {% set reference_soc = initial_peak if (initial_peak > current_soc) else highest_soc %}
+              {# Always use the individual battery's peak SOC as reference #}
+              {% set reference_soc = initial_peak %}
               {# Only add to turn-off list if SOC is low AND we have more than 1 battery currently on #}
               {% if current_soc <= (reference_soc - 2) and batteries_currently_on | length > 1 %}
                 {% set ns.turnoff_list = ns.turnoff_list + [{'name': battery.name, 'soc': current_soc, 'switch': battery.switch, 'reference_soc': reference_soc, 'peak_soc': initial_peak}] %}
               {% endif %}
             {% endfor %}
             {{ ns.turnoff_list }}
+
+      # DEBUG: Log detailed battery turn-off calculation
+      - service: system_log.write
+        data:
+          message: >
+            Battery Protection: DEBUG - Turn-off calculation details:
+            {% for battery in valid_batteries %}
+              {% set current_soc = states(battery.soc) | float %}
+              {% set peak_entity = 'input_number.battery_' + battery.name + '_peak_soc' %}
+              {% set stored_peak = states(peak_entity) | float(0) %}
+              {% set initial_peak = highest_soc if (stored_peak == 0 or automation_just_started) else stored_peak %}
+              {% set reference_soc = initial_peak %}
+              {% set batteries_currently_on = [] %}
+              {% for bat in valid_batteries %}
+                {% if is_state(bat.switch, 'on') %}
+                  {% set batteries_currently_on = batteries_currently_on + [bat.name] %}
+                {% endif %}
+              {% endfor %}
+              {% set condition_met = current_soc <= (reference_soc - 2) and batteries_currently_on | length > 1 %}
+              {{ battery.name }}(SOC:{{ current_soc }}%,Peak:{{ initial_peak }}%,Ref:{{ reference_soc }}%,Threshold:{{ reference_soc - 2 }}%,Switch:{{ states(battery.switch) }},BattOn:{{ batteries_currently_on | length }},Condition:{{ condition_met }}){% if not loop.last %}, {% endif %}
+            {% endfor %}
+          level: warning
           
           # Determine which batteries should be turned on (SOC >= highest_soc)
           batteries_to_turn_on: >
@@ -183,20 +205,11 @@ automation:
             # Additional turn-off logic during update cycle
             # Turn off battery if: discharging is ON AND current_soc < previous_soc AND (peak_soc - current_soc) <= 2
             # BUT only if there are more than 1 batteries currently ON
+            # DISABLED FOR DEBUGGING - This logic may interfere with main turn-off logic
             - choose:
                 - conditions:
                     - condition: template
-                      value_template: >
-                        {% set batteries_currently_on = [] %}
-                        {% for battery in valid_batteries %}
-                          {% if is_state(battery.switch, 'on') %}
-                            {% set batteries_currently_on = batteries_currently_on + [battery.name] %}
-                          {% endif %}
-                        {% endfor %}
-                        {{ is_state('switch.dadski_battery_' + repeat.item.name + '_discharging', 'on') and
-                           repeat.item.soc_decreasing and
-                           (repeat.item.initial_peak - repeat.item.current_soc) <= 2 and
-                           batteries_currently_on | length > 1 }}
+                      value_template: "false"  # Temporarily disabled
                   sequence:
                     - service: switch.turn_off
                       target:
@@ -265,42 +278,13 @@ automation:
       - service: system_log.write
         data:
           message: >
-            Update Cycle Turn-Off Actions: 
-            {% set update_turnoffs = [] %}
-            {% set batteries_currently_on = [] %}
-            {% for battery in valid_batteries %}
-              {% if is_state(battery.switch, 'on') %}
-                {% set batteries_currently_on = batteries_currently_on + [battery.name] %}
-              {% endif %}
-            {% endfor %}
-            {% for battery in battery_peak_socs %}
-              {% if battery.soc_decreasing and (battery.initial_peak - battery.current_soc) <= 2 and batteries_currently_on | length > 1 %}
-                {% if is_state('switch.dadski_battery_' + battery.name + '_discharging', 'off') %}
-                  {% set update_turnoffs = update_turnoffs + [battery.name + '(' + battery.current_soc|string + '% < ' + battery.previous_soc|string + '% & Peak-Current: ' + (battery.initial_peak - battery.current_soc)|string + '% <= 2%)'] %}
-                {% endif %}
-              {% endif %}
-            {% endfor %}
-            {% if update_turnoffs | length > 0 %}
-              {{ update_turnoffs | join(', ') }}
-            {% else %}
-              {% set blocked_turnoffs = [] %}
-              {% for battery in battery_peak_socs %}
-                {% if battery.soc_decreasing and (battery.initial_peak - battery.current_soc) <= 2 and batteries_currently_on | length <= 1 %}
-                  {% set blocked_turnoffs = blocked_turnoffs + [battery.name + '(BLOCKED - last battery)'] %}
-                {% endif %}
-              {% endfor %}
-              {% if blocked_turnoffs | length > 0 %}
-                BLOCKED: {{ blocked_turnoffs | join(', ') }}
-              {% else %}
-                None
-              {% endif %}
-            {% endif %}
+            Update Cycle Turn-Off Actions: DISABLED FOR DEBUGGING
           level: info
 
       # Log the new logic reasoning with peak SOC tracking
       - service: system_log.write
         data:
-          message: "Battery Protection Logic: Turn OFF batteries with SOC <= (stored_peak - 2)% OR (current_highest - 2)%, Turn ON batteries with SOC >= current_highest%. Always keep at least 1 battery ON."
+          message: "Battery Protection Logic: Turn OFF batteries with SOC <= (individual_peak - 2)%, Turn ON batteries with SOC >= current_highest%. Always keep at least 1 battery ON."
           level: info
 
       # Log sorted battery data for debugging
@@ -325,7 +309,7 @@ automation:
                 {% set peak_entity = 'input_number.battery_' + battery.name + '_peak_soc' %}
                 {% set stored_peak = states(peak_entity) | float(0) %}
                 {% set initial_peak = highest_soc if (stored_peak == 0 or automation_just_started) else stored_peak %}
-                {% set reference_soc = initial_peak if (initial_peak > current_soc) else highest_soc %}
+                {% set reference_soc = initial_peak %}
                 {% set batteries_currently_on = [] %}
                 {% for bat in valid_batteries %}
                   {% if is_state(bat.switch, 'on') %}
@@ -372,7 +356,7 @@ automation:
                   {% set current_soc = states(repeat.item.soc) | float %}
                   {% set stored_peak = states('input_number.battery_' + repeat.item.name + '_peak_soc') | float(0) %}
                   {% set initial_peak = highest_soc if (stored_peak == 0 or automation_just_started) else stored_peak %}
-                  {{ initial_peak if (initial_peak > current_soc) else highest_soc }}
+                  {{ initial_peak }}
                 is_in_turnoff_list: >
                   {% set ns = namespace(found=false) %}
                   {% for battery in batteries_to_turn_off %}
@@ -421,10 +405,8 @@ automation:
                       "SOC {{ soc }}% <= {{ ref_soc - 2 }}% (initialized peak {{ initial_peak }}% - 2) - should be OFF"
                     {% elif automation_just_started %}
                       "SOC {{ soc }}% <= {{ ref_soc - 2 }}% (reset peak {{ initial_peak }}% - 2) - should be OFF"
-                    {% elif initial_peak > soc %}
-                      "SOC {{ soc }}% <= {{ ref_soc - 2 }}% (stored peak {{ initial_peak }}% - 2) - should be OFF"
                     {% else %}
-                      "SOC {{ soc }}% <= {{ ref_soc - 2 }}% (current highest - 2) - should be OFF"
+                      "SOC {{ soc }}% <= {{ ref_soc - 2 }}% (stored peak {{ initial_peak }}% - 2) - should be OFF"
                     {% endif %}
                   {% elif soc >= highest_soc %}
                     "SOC {{ soc }}% >= {{ highest_soc }}% (current highest) - should be ON"
@@ -476,13 +458,21 @@ automation:
               level: info
 
           # Turn off discharging for batteries with SOC <= highest_soc - 2
+          - service: system_log.write
+            data:
+              message: "Battery Protection: DEBUG - batteries_to_turn_off list has {{ batteries_to_turn_off | length }} batteries: {{ batteries_to_turn_off | map(attribute='name') | list | join(', ') }}"
+              level: warning
           - repeat:
               for_each: "{{ batteries_to_turn_off }}"
               sequence:
                 - service: system_log.write
                   data:
-                    message: "Battery Protection: Processing {{ repeat.item.name }} for TURN OFF (SOC: {{ repeat.item.soc }}%, Switch: {{ states(repeat.item.switch) }})"
-                    level: info
+                    message: "Battery Protection: DEBUG - Processing {{ repeat.item.name }} for TURN OFF (SOC: {{ repeat.item.soc }}%, Switch: {{ states(repeat.item.switch) }}, Switch Entity: {{ repeat.item.switch }})"
+                    level: warning
+                - service: system_log.write
+                  data:
+                    message: "Battery Protection: DEBUG - Conditions for {{ repeat.item.name }}: is_state='{{ is_state(repeat.item.switch, 'on') }}', soc_valid='{{ repeat.item.soc | string | is_number }}', soc_not_unavailable='{{ repeat.item.soc | string not in ['unavailable', 'unknown'] }}'"
+                    level: warning
                 - choose:
                     - conditions:
                         - condition: and
@@ -494,6 +484,10 @@ automation:
                                 {% set soc_val = repeat.item.soc | string %}
                                 {{ soc_val | is_number and soc_val not in ['unavailable', 'unknown'] }}
                       sequence:
+                        - service: system_log.write
+                          data:
+                            message: "Battery Protection: DEBUG - All conditions met for {{ repeat.item.name }}, executing turn off"
+                            level: warning
                         - service: switch.turn_off
                           target:
                             entity_id: "{{ repeat.item.switch }}"
@@ -504,8 +498,8 @@ automation:
                   default:
                     - service: system_log.write
                       data:
-                        message: "Battery Protection: ✗ IGNORED turn OFF for {{ repeat.item.name }} - REASON: Conditions not met"
-                        level: info
+                        message: "Battery Protection: ✗ IGNORED turn OFF for {{ repeat.item.name }} - REASON: Conditions not met (switch_state={{ states(repeat.item.switch) }}, is_on={{ is_state(repeat.item.switch, 'on') }})"
+                        level: warning
 
           # Turn on discharging for batteries with SOC >= highest_soc
           - repeat:
