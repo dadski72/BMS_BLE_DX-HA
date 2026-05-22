@@ -34,7 +34,7 @@ echo "Creating zip file: $ASSET_NAME"
 if [ -f "$ASSET_NAME" ]; then
     echo "Zip file created successfully. Size: $(du -h "$ASSET_NAME" | cut -f1)"
     echo "Contents preview:"
-    7z l "$ASSET_NAME" | head -15
+    7zz l "$ASSET_NAME" | head -15
 else
     echo "ERROR: Failed to create zip file!"
     exit 1
