@@ -1,10 +1,12 @@
 """Test DX-specific BMS wrappers."""
 
+from typing import cast
 from unittest.mock import AsyncMock
 
 from aiobmsble import BMSSample
 from aiobmsble.bms.jbd_bms import BMS as JbdBMS
 from aiobmsble.bms.redodo_bms import BMS as RedodoBMS
+from bleak.backends.characteristic import BleakGATTCharacteristic
 from bleak.exc import BleakError
 import pytest
 
@@ -84,7 +86,7 @@ def test_jbd_notification_handler(
 ) -> None:
     """Test JBD discharge acknowledgement handling."""
     bms = DxJbdBMS(generate_ble_device(address="cc:cc:cc:cc:cc:cc"))
-    sender = object()
+    sender = cast("BleakGATTCharacteristic", object())
 
     bms._notification_handler(sender, bytearray(DxJbdBMS._CMD_DISCHARGE_ACK))
     assert bms._msg == DxJbdBMS._CMD_DISCHARGE_ACK

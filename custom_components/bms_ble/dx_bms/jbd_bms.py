@@ -7,7 +7,7 @@ from bleak.backends.characteristic import BleakGATTCharacteristic
 from bleak.exc import BleakError
 
 
-class BMS(JbdBMS):
+class BMS(JbdBMS):  # type: ignore[misc]
     """JBD smart BMS implementation extended with discharge control."""
 
     _CMD_ENABLE_DISCHARGE: Final[bytes] = bytes(

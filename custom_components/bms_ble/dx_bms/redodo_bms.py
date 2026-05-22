@@ -1,13 +1,13 @@
 """Redodo BMS wrapper with discharge control support."""
 
-from typing import Final
+from typing import Any, Final
 
 from aiobmsble import BMSSample
 from aiobmsble.bms.redodo_bms import BMS as RedodoBMS
 from bleak.exc import BleakError
 
 
-class BMS(RedodoBMS):
+class BMS(RedodoBMS):  # type: ignore[misc]
     """Redodo BMS implementation extended with discharge control."""
 
     _CMD_ENABLE_DISCHARGE: Final[bytes] = bytes(
@@ -17,7 +17,7 @@ class BMS(RedodoBMS):
         [0x00, 0x00, 0x04, 0x01, 0x0D, 0x55, 0xAA, 0x11]
     )
 
-    def __init__(self, *args, **kwargs) -> None:
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Initialize the wrapper."""
         super().__init__(*args, **kwargs)
         self._last_discharge_state: bool = False
