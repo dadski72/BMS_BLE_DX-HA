@@ -28,7 +28,7 @@ fi
 
 # Create the zip file with proper directory structure
 echo "Creating zip file: $ASSET_NAME"
-7z a -tzip "$ASSET_NAME" "./custom_components/bms_ble/*" -r
+7zz a -tzip "$ASSET_NAME" "./custom_components/bms_ble/*" -r
 
 # Verify the zip file was created successfully
 if [ -f "$ASSET_NAME" ]; then
