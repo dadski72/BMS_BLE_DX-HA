@@ -1,33 +1,27 @@
 """Common fixtures for the BLE Battery Management System integration tests."""
 
-from collections.abc import Awaitable, Buffer, Callable, Iterable
-import importlib
+from collections.abc import Awaitable, Buffer, Callable, Generator, Iterable
 import logging
-from types import ModuleType
-from typing import Any, Literal
+from typing import Any, Final
+from unittest.mock import PropertyMock, patch
 from uuid import UUID
 
-from _pytest.config import Notset
+from aiobmsble import BMSInfo, BMSSample, MatcherPattern
+from aiobmsble.basebms import BaseBMS
+from aiobmsble.utils import load_bms_plugins
 from bleak import BleakClient
 from bleak.backends.characteristic import BleakGATTCharacteristic
-from bleak.backends.descriptor import BleakGATTDescriptor
 from bleak.backends.device import BLEDevice
 from bleak.backends.service import BleakGATTServiceCollection
 from bleak.exc import BleakError
-from bleak.uuids import normalize_uuid_str, uuidstr_to_str
+from bleak.uuids import normalize_uuid_str
 from home_assistant_bluetooth import SOURCE_LOCAL, BluetoothServiceInfoBleak
-from hypothesis import HealthCheck, settings
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.bms_ble.const import ATTR_VOLTAGE, BMS_TYPES, DOMAIN
-from custom_components.bms_ble.plugins.basebms import (
-    AdvertisementPattern,
-    BaseBMS,
-    BMSsample,
-)
-
-from .bluetooth import generate_advertisement_data, generate_ble_device
+from custom_components.bms_ble.config_flow import ConfigFlow
+from custom_components.bms_ble.const import DOMAIN
+from tests.bluetooth import generate_advertisement_data, generate_ble_device
 
 LOGGER: logging.Logger = logging.getLogger(__name__)
 
@@ -43,108 +37,93 @@ def pytest_addoption(parser) -> None:
     )
 
 
-def pytest_configure(config: pytest.Config) -> None:
-    """Configure pytest with custom settings."""
-    max_examples: int | Notset = config.getoption("--max-examples")
-    settings.register_profile(
-        "default",
-        max_examples=max_examples,
-        suppress_health_check=[HealthCheck.function_scoped_fixture],
-    )
-    settings.load_profile("default")
-
-
 @pytest.fixture(autouse=True)
 def auto_enable_custom_integrations(enable_custom_integrations: Any) -> None:
     """Auto add enable_custom_integrations."""
     return
 
 
+@pytest.fixture(autouse=True, scope="session")
+def patch_bluetooth_adapter_history() -> Generator[None]:
+    """Patch Bluetooth adapter history that is unavailable in local tests."""
+    with patch(
+        "bluetooth_adapters.systems.linux.LinuxAdapters.history",
+        new_callable=PropertyMock,
+        return_value={},
+    ):
+        yield
+
+
 @pytest.fixture(params=[False, True])
-def bool_fixture(request) -> bool:
+def bool_fixture(request: pytest.FixtureRequest) -> bool:
     """Return False, True for tests."""
     return request.param
 
 
-@pytest.fixture(params=[*BMS_TYPES, "dummy_bms"])
-def bms_fixture(request) -> str:
+@pytest.fixture(
+    params=[
+        bms.__name__.rsplit(".", 1)[-1]
+        for bms in sorted(
+            load_bms_plugins(), key=lambda plugin: getattr(plugin, "__name__", "")
+        )
+    ]
+)
+def bms_fixture(request: pytest.FixtureRequest) -> str:
     """Return all possible BMS variants."""
     return request.param
 
 
-@pytest.fixture(params=[-13, 0, 21])
-def bms_data_fixture(request) -> BMSsample:
-    """Return a fake BMS data dictionary."""
-
-    return {
-        "voltage": 7.0,
-        "current": request.param,
-        "cycle_charge": 34,
-        "cell_voltages": [3.456, 3.567],
-        "temp_values": [-273.15, 0.01, 35.555, 100.0],
-    }
-
-
 @pytest.fixture
-def patch_bms_timeout(monkeypatch):
-    """Fixture to patch BMS.TIMEOUT for different BMS classes."""
-
-    def _patch_timeout(bms_class: str | None = None, timeout: float = 0.001) -> None:
-        patch_class: str = f"{bms_class}.BMS.TIMEOUT" if bms_class else "basebms.BLEAK_TRANSIENT_BACKOFF_TIME"
-        monkeypatch.setattr(
-            f"custom_components.bms_ble.plugins.{patch_class}",
-            timeout,
-        )
-
-    return _patch_timeout
-
-
-@pytest.fixture
-def patch_default_bleak_client(monkeypatch) -> None:
+def patch_default_bleak_client(monkeypatch: pytest.MonkeyPatch) -> None:
     """Patch BleakClient to a mock as BT is not available.
 
     required because BTdiscovery cannot be used to generate a BleakClient in async_setup()
     """
-    monkeypatch.setattr(
-        "custom_components.bms_ble.plugins.basebms.BleakClient", MockBleakClient
-    )
+    monkeypatch.setattr("aiobmsble.basebms.BleakClient", MockBleakClient)
 
 
 @pytest.fixture
-def patch_bleak_client(monkeypatch):
-    """Fixture to patch BleakClient with a given MockClient."""
+def patch_entity_enabled_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Patch Entity.entity_registry_enabled_default to always return True."""
 
-    def _patch(mock_client=MockBleakClient) -> None:
-        monkeypatch.setattr(
-            "custom_components.bms_ble.plugins.basebms.BleakClient",
-            mock_client,
-        )
-
-    return _patch
+    monkeypatch.setattr(
+        "homeassistant.helpers.entity.Entity.entity_registry_enabled_default",
+        lambda _: True,
+    )
 
 
 @pytest.fixture
 def bt_discovery() -> BluetoothServiceInfoBleak:
     """Return a valid Bluetooth object for testing."""
+    DATA: Final[dict[str, Any]] = {
+        "name": "SmartBat-B12345",
+        "address": "cc:cc:cc:cc:cc:cc",
+        "service_uuids": ["0000fff0-0000-1000-8000-00805f9b34fb"],
+        "rssi": -61,
+        "tx_power": -76,
+    }
+
     return BluetoothServiceInfoBleak(
-        name="SmartBat-B12345",
-        address="cc:cc:cc:cc:cc:cc",
+        name=DATA["name"],
+        address=DATA["address"],
         device=generate_ble_device(
-            address="cc:cc:cc:cc:cc:cc",
-            name="SmartBat-B12345",
+            address=DATA["address"],
+            name=DATA["name"],
         ),
-        rssi=-61,
-        service_uuids=["0000fff0-0000-1000-8000-00805f9b34fb"],
+        rssi=DATA["rssi"],
+        service_uuids=DATA["service_uuids"],
         manufacturer_data={},
         service_data={},
         advertisement=generate_advertisement_data(
-            local_name="SmartBat-B12345",
-            service_uuids=["0000fff0-0000-1000-8000-00805f9b34fb"],
+            local_name=DATA["name"],
+            service_uuids=DATA["service_uuids"],
+            rssi=DATA["rssi"],
+            tx_power=DATA["tx_power"],
         ),
         source=SOURCE_LOCAL,
         connectable=True,
         time=0,
-        tx_power=-76,
+        tx_power=DATA["tx_power"],
     )
 
 
@@ -174,22 +153,27 @@ def bt_discovery_notsupported() -> BluetoothServiceInfoBleak:
 
 
 def mock_config(
-    bms: str, unique_id: str | None = "cc:cc:cc:cc:cc:cc"
+    bms: str = "dummy_bms",
+    unique_id: str | None = "cc:cc:cc:cc:cc:cc",
+    options: dict[str, str] | None = None,
 ) -> MockConfigEntry:
-    """Return a Mock of the HA entity config."""
+    """Return a Mock of the HA entity config (latest version)."""
     return MockConfigEntry(
+        data={"type": f"aiobmsble.bms.{bms}"},
         domain=DOMAIN,
-        version=1,
-        minor_version=0,
+        minor_version=ConfigFlow.MINOR_VERSION,
+        options=options,
         unique_id=unique_id,
-        data={"type": f"custom_components.bms_ble.plugins.{bms}"},
-        title=bms,
+        title=f"config_test_{bms}",
+        version=ConfigFlow.VERSION,
     )
 
 
 @pytest.fixture(params=["OGTBms", "DalyBms"])
-def mock_config_v0_1(request, unique_id="cc:cc:cc:cc:cc:cc") -> MockConfigEntry:
-    """Return a Mock of the HA entity config."""
+def mock_config_v0_1(
+    request: pytest.FixtureRequest, unique_id: str = "cc:cc:cc:cc:cc:cc"
+) -> MockConfigEntry:
+    """Return a Mock of the HA entity config v0.1."""
     return MockConfigEntry(
         domain=DOMAIN,
         version=0,
@@ -200,47 +184,46 @@ def mock_config_v0_1(request, unique_id="cc:cc:cc:cc:cc:cc") -> MockConfigEntry:
     )
 
 
-@pytest.fixture(params=[TimeoutError, BleakError, EOFError])
-def mock_coordinator_exception(request: pytest.FixtureRequest) -> Exception:
-    """Return possible exceptions for mock BMS update function."""
-    return request.param
-
-
-@pytest.fixture(params=[*BMS_TYPES, "dummy_bms"])
-def plugin_fixture(request: pytest.FixtureRequest) -> ModuleType:
-    """Return module of a BMS."""
-    return importlib.import_module(
-        f"custom_components.bms_ble.plugins.{request.param}",
-        package=__name__[: __name__.rfind(".")],
+def mock_config_v1_0(bms: str, unique_id: str = "cc:cc:cc:cc:cc:cc") -> MockConfigEntry:
+    """Return a Mock of the HA entity config v1.0."""
+    return MockConfigEntry(
+        domain=DOMAIN,
+        version=1,
+        minor_version=0,
+        unique_id=unique_id,
+        data={"type": f"custom_components.bms_ble.plugins.{bms}"},
+        title=f"config_test_{bms}",
     )
 
 
-@pytest.fixture(params=[False, True], ids=["persist", "reconnect"])
-def reconnect_fixture(request: pytest.FixtureRequest) -> bool:
-    """Return False, True for reconnect test."""
-    return request.param
-
-
-# all names result in same encryption key for easier testing
-@pytest.fixture(params=["SmartBat-A12345", "SmartBat-B12294"])
-def ogt_bms_fixture(request) -> str:
-    """Return OGT SmartBMS names."""
-    return request.param
+def mock_config_v2_0(bms: str, unique_id: str = "cc:cc:cc:cc:cc:cc") -> MockConfigEntry:
+    """Return a Mock of the HA entity config v2.0."""
+    return MockConfigEntry(
+        domain=DOMAIN,
+        version=2,
+        minor_version=0,
+        unique_id=unique_id,
+        data={"type": f"aiobmsble.bms.{bms}"},
+        title=f"config_test_{bms}",
+    )
 
 
 class MockBMS(BaseBMS):
     """Mock Battery Management System."""
 
+    INFO: BMSInfo = {
+        "default_manufacturer": "Mock Manufacturer",
+        "default_model": "MockBMS",
+    }
+
     def __init__(
-        self, exc: Exception | None = None, ret_value: BMSsample | None = None
-    ) -> None:  # , ble_device, reconnect: bool = False
+        self, exc: Exception | None = None, ret_value: BMSSample | None = None
+    ) -> None:  # , ble_device, keep_alive: bool = True
         """Initialize BMS."""
-        super().__init__(
-            LOGGER.name, generate_ble_device(address="", details={"path": None}), False
-        )
-        LOGGER.debug("%s init(), Test except: %s", self.device_id(), str(exc))
+        super().__init__(generate_ble_device(address="", details={"path": None}), True)
+        LOGGER.debug("%s init(), Test except: %s", MockBMS.bms_id(), str(exc))
         self._exception: Exception | None = exc
-        self._ret_value: BMSsample = (
+        self._ret_value: BMSSample = (
             ret_value
             if ret_value is not None
             else {
@@ -252,19 +235,14 @@ class MockBMS(BaseBMS):
         )  # set fixed values for dummy battery
 
     @staticmethod
-    def matcher_dict_list() -> list[AdvertisementPattern]:
+    def matcher_dict_list() -> list[MatcherPattern]:
         """Provide BluetoothMatcher definition."""
         return [{"local_name": "mock", "connectable": True}]
 
     @staticmethod
-    def device_info() -> dict[str, str]:
-        """Return device information for the battery management system."""
-        return {"manufacturer": "Mock Manufacturer", "model": "mock model"}
-
-    @staticmethod
-    def uuid_services() -> list[str]:
+    def uuid_services() -> tuple[str, ...]:
         """Return list of services required by BMS."""
-        return [normalize_uuid_str("cafe")]
+        return (normalize_uuid_str("cafe"),)
 
     @staticmethod
     def uuid_rx() -> str:
@@ -284,7 +262,7 @@ class MockBMS(BaseBMS):
     # async def disconnect(self) -> None:
     #     """Disconnect connection to BMS if active."""
 
-    async def _async_update(self) -> BMSsample:
+    async def _async_update(self) -> BMSSample:
         """Update battery status information."""
         await self._connect()
 
@@ -302,6 +280,7 @@ class MockBleakClient(BleakClient):
         address_or_ble_device: BLEDevice,
         disconnected_callback: Callable[[BleakClient], None] | None,
         services: Iterable[str] | None = None,
+        **kwargs,
     ) -> None:
         """Mock init."""
         LOGGER.debug("MockBleakClient init")
@@ -309,7 +288,10 @@ class MockBleakClient(BleakClient):
             address_or_ble_device.address
         )  # call with address to avoid backend resolving
         self._connected: bool = False
-        self._notify_callback: Callable | None = None
+        self._notify_callback: (
+            Callable[[BleakGATTCharacteristic, bytearray], None | Awaitable[None]]
+            | None
+        ) = None
         self._disconnect_callback: Callable[[BleakClient], None] | None = (
             disconnected_callback
         )
@@ -331,12 +313,11 @@ class MockBleakClient(BleakClient):
         """Mock GATT services."""
         return BleakGATTServiceCollection()
 
-    async def connect(self, *_args, **_kwargs) -> Literal[True]:
+    async def connect(self, *_args, **_kwargs) -> None:
         """Mock connect."""
         assert not self._connected, "connect called, but client already connected."
         LOGGER.debug("MockBleakClient connecting %s", self._ble_device.address)
         self._connected = True
-        return True
 
     async def start_notify(
         self,
@@ -373,72 +354,38 @@ class MockBleakClient(BleakClient):
         assert self._connected, "read_gatt_char called, but client not connected."
         return bytearray()
 
-    async def disconnect(self) -> bool:
+    async def disconnect(self) -> None:
         """Mock disconnect."""
-        assert self._connected, "Disconnect called, but client not connected."
+
         LOGGER.debug("MockBleakClient disconnecting %s", self._ble_device.address)
         self._connected = False
         if self._disconnect_callback is not None:
             self._disconnect_callback(self)
 
-        return True
+
+async def mock_update_min(_self) -> BMSSample:
+    """Minimal version of a BMS update to mock initial coordinator update."""
+    return {"voltage": 12.3, "battery_charging": False}
 
 
-class MockRespChar(BleakGATTCharacteristic):
-    """Mock response characteristic."""
-
-    @property
-    def service_uuid(self) -> str:
-        """The UUID of the Service containing this characteristic."""
-        raise NotImplementedError
-
-    @property
-    def service_handle(self) -> int:
-        """The integer handle of the Service containing this characteristic."""
-        raise NotImplementedError
-
-    @property
-    def handle(self) -> int:
-        """The handle for this characteristic."""
-        raise NotImplementedError
-
-    @property
-    def uuid(self) -> str:
-        """The UUID for this characteristic."""
-        return normalize_uuid_str("fff4")
-
-    @property
-    def description(self) -> str:
-        """Description for this characteristic."""
-        return uuidstr_to_str(self.uuid)
-
-    @property
-    def properties(self) -> list[str]:
-        """Properties of this characteristic."""
-        raise NotImplementedError
-
-    @property
-    def descriptors(self) -> list[BleakGATTDescriptor]:
-        """List of descriptors for this service."""
-        raise NotImplementedError
-
-    def get_descriptor(self, specifier: int | str | UUID) -> BleakGATTDescriptor | None:
-        """Get a descriptor by handle (int) or UUID (str or uuid.UUID)."""
-        raise NotImplementedError
-
-    def add_descriptor(self, descriptor: BleakGATTDescriptor):
-        """Add a :py:class:`~BleakGATTDescriptor` to the characteristic.
-
-        Should not be used by end user, but rather by `bleak` itself.
-        """
-        raise NotImplementedError
+async def mock_update_full(self) -> BMSSample:
+    """Include optional sensors for BMS update to mock initial coordinator update."""
+    return await mock_update_min(self) | {
+        "problem": False,
+        "balancer": 0x0,
+        "battery_charging": True,
+        "battery_health": 73,
+        "chrg_mosfet": False,
+        "dischrg_mosfet": False,
+        "heater": False,
+    }
 
 
-async def mock_update_min(_self) -> BMSsample:
-    """Minimal version of a BMS update to mock initial coordinator update easily."""
-    return {ATTR_VOLTAGE: 12.3}
-
-
-async def mock_update_exc(_self) -> BMSsample:
-    """Failing version of a BMS update to mock initial coordinator update easily."""
+async def mock_exception(_self) -> BMSSample:
+    """Failing version of a BMS update to mock initial coordinator update."""
     raise BleakError
+
+
+async def mock_devinfo_min(_self) -> BMSInfo:
+    """Minimal version of a BMS device info to mock initial coordinator update."""
+    return {"manufacturer": "Mock manufacturer"}

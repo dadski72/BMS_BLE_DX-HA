@@ -3,6 +3,7 @@
 from datetime import timedelta
 from typing import Final
 
+from aiobmsble import BMSSample
 from habluetooth import BluetoothServiceInfoBleak
 import pytest
 from pytest_homeassistant_custom_component.common import (
@@ -20,40 +21,42 @@ from custom_components.bms_ble.const import (
     ATTR_POWER,
     ATTR_RUNTIME,
     ATTR_TEMP_SENSORS,
-    ATTR_TEMPERATURE,
-    ATTR_VOLTAGE,
+    LINK_SENSORS,
+    SENSORS,
     UPDATE_INTERVAL,
 )
-from custom_components.bms_ble.plugins.basebms import BMSsample
 from homeassistant.config_entries import ConfigEntryState
+from homeassistant.const import ATTR_TEMPERATURE, ATTR_VOLTAGE, STATE_UNKNOWN
 from homeassistant.core import HomeAssistant, State
 from homeassistant.helpers.entity_component import async_update_entity
 import homeassistant.util.dt as dt_util
 
 from .bluetooth import inject_bluetooth_service_info_bleak
-from .conftest import mock_config
+from .conftest import mock_config, mock_devinfo_min
 
-DEV_NAME: Final[str] = "sensor.smartbat_b12345"
+DEV_NAME: Final[str] = "sensor.config_test_dummy_bms"
 
 
-@pytest.mark.usefixtures("enable_bluetooth", "patch_default_bleak_client")
+@pytest.mark.usefixtures(
+    "enable_bluetooth", "patch_default_bleak_client", "patch_entity_enabled_default"
+)  # enable bluetooth, patch bleak client and enable all sensors
 async def test_update(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
     bt_discovery: BluetoothServiceInfoBleak,
-    bool_fixture,
+    bool_fixture: bool,
     hass: HomeAssistant,
 ) -> None:
     """Test sensor value updates through coordinator."""
 
-    async def patch_async_update(_self) -> BMSsample:
+    async def patch_async_update(_self) -> BMSSample:
         """Patch async_update to return a specific value."""
-        return BMSsample(
+        return BMSSample(
             {
                 "balance_current": -1.234,
                 "battery_level": 42,
                 "voltage": 17.0,
                 "current": 0,
-                "cell_voltages": [3, 3.123],
+                "cell_voltages": [3.1, 3, 3.123],
                 "delta_voltage": 0.123,
                 "temperature": 43.86,
                 "problem": True,
@@ -72,12 +75,10 @@ async def test_update(
             else {}
         )
 
-    monkeypatch.setattr(
-        "homeassistant.helpers.entity.Entity.entity_registry_enabled_default",
-        lambda _: True,
-    )
+    bms_class: Final[str] = "aiobmsble.bms.dummy_bms.BMS"
+    monkeypatch.setattr(f"{bms_class}.device_info", mock_devinfo_min)
 
-    config: MockConfigEntry = mock_config(bms="dummy_bms")
+    config: MockConfigEntry = mock_config()
     config.add_to_hass(hass)
 
     inject_bluetooth_service_info_bleak(hass, bt_discovery)
@@ -87,28 +88,27 @@ async def test_update(
 
     assert config in hass.config_entries.async_entries()
     assert config.state is ConfigEntryState.LOADED
-    assert len(hass.states.async_all(["sensor"])) == 11
+    assert len(hass.states.async_all(["sensor"])) == (SENSORS - 1) + LINK_SENSORS
     data: dict[str, str] = {
         entity.entity_id: entity.state for entity in hass.states.async_all(["sensor"])
     }
     assert data == {
         f"{DEV_NAME}_{ATTR_VOLTAGE}": "12",
-        f"{DEV_NAME}_battery": "unknown",
+        f"{DEV_NAME}_battery": STATE_UNKNOWN,
         f"{DEV_NAME}_{ATTR_TEMPERATURE}": "27.182",
         f"{DEV_NAME}_{ATTR_CURRENT}": "1.5",
-        f"{DEV_NAME}_stored_energy": "unknown",
-        f"{DEV_NAME}_{ATTR_CYCLES}": "unknown",
-        f"{DEV_NAME}_{ATTR_DELTA_VOLTAGE}": "unknown",
+        f"{DEV_NAME}_stored_energy": STATE_UNKNOWN,
+        f"{DEV_NAME}_{ATTR_CYCLES}": STATE_UNKNOWN,
+        f"{DEV_NAME}_{ATTR_DELTA_VOLTAGE}": STATE_UNKNOWN,
         f"{DEV_NAME}_{ATTR_LQ}": "0",
+        f"{DEV_NAME}_highest_cell_voltage": STATE_UNKNOWN,
+        f"{DEV_NAME}_lowest_cell_voltage": STATE_UNKNOWN,
         f"{DEV_NAME}_{ATTR_POWER}": "18.0",
-        f"{DEV_NAME}_signal_strength": "-127",
-        f"{DEV_NAME}_{ATTR_RUNTIME}": "unknown",
+        f"{DEV_NAME}_signal_strength": STATE_UNKNOWN,
+        f"{DEV_NAME}_{ATTR_RUNTIME}": STATE_UNKNOWN,
     }
 
-    monkeypatch.setattr(
-        "custom_components.bms_ble.plugins.dummy_bms.BMS.async_update",
-        patch_async_update,
-    )
+    monkeypatch.setattr(f"{bms_class}.async_update", patch_async_update)
 
     async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=UPDATE_INTERVAL))
     await hass.async_block_till_done()
@@ -125,19 +125,21 @@ async def test_update(
         entity.entity_id: entity.state for entity in hass.states.async_all(["sensor"])
     }
 
-    # check all sensor have correct updated value
+    # check all sensor have correct updated value (translated names: EN)
     assert data == {
         f"{DEV_NAME}_{ATTR_VOLTAGE}": "17.0",
         f"{DEV_NAME}_battery": "42",
         f"{DEV_NAME}_{ATTR_TEMPERATURE}": "43.86",
         f"{DEV_NAME}_{ATTR_CURRENT}": "0",
-        f"{DEV_NAME}_stored_energy": "unknown",
-        f"{DEV_NAME}_{ATTR_CYCLES}": "unknown",
+        f"{DEV_NAME}_stored_energy": STATE_UNKNOWN,
+        f"{DEV_NAME}_{ATTR_CYCLES}": STATE_UNKNOWN,
         f"{DEV_NAME}_{ATTR_DELTA_VOLTAGE}": "0.123",
         f"{DEV_NAME}_{ATTR_LQ}": "66",  # initial update + one UPDATE_INTERVAL
-        f"{DEV_NAME}_{ATTR_POWER}": "unknown",
+        f"{DEV_NAME}_highest_cell_voltage": "3.123",
+        f"{DEV_NAME}_lowest_cell_voltage": "3",
+        f"{DEV_NAME}_{ATTR_POWER}": STATE_UNKNOWN,
         f"{DEV_NAME}_signal_strength": "-61",
-        f"{DEV_NAME}_{ATTR_RUNTIME}": "unknown",
+        f"{DEV_NAME}_{ATTR_RUNTIME}": STATE_UNKNOWN,
     }
 
     # check that attributes to sensors were updated
@@ -145,11 +147,10 @@ async def test_update(
         (
             ATTR_DELTA_VOLTAGE,
             ATTR_CELL_VOLTAGES,
-            [
-                3,
-                3.123,
-            ],
+            [3.1, 3, 3.123],
         ),
+        ("highest_cell_voltage", "cell_number", [3]),
+        ("lowest_cell_voltage", "cell_number", [2]),
         (
             ATTR_TEMPERATURE,
             ATTR_TEMP_SENSORS,
@@ -162,9 +163,9 @@ async def test_update(
         ),
     ):
         state: State | None = hass.states.get(f"{DEV_NAME}_{sensor}")
-        assert (
-            state is not None and state.attributes[attribute] == value
-        ), f"failed to verify attribute {attribute} for sensor {sensor}"
+        assert state is not None and state.attributes[attribute] == value, (
+            f"failed to verify attribute {attribute} for sensor {sensor}"
+        )
 
     # check battery pack attributes
     for sensor, attribute, ref_value in (
@@ -177,4 +178,4 @@ async def test_update(
         assert pack_state is not None, f"failed to get state of sensor '{sensor}'"
         assert pack_state.attributes.get(attribute, None) == (
             ref_value if bool_fixture else None
-        ), f"faild to verify sensor '{sensor}' attribute '{attribute}'"
+        ), f"failed to verify sensor '{sensor}' attribute '{attribute}'"

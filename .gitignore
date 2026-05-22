@@ -1,5 +1,3 @@
-bms_ble_dx.zip
-# uploadasset.sh
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -163,3 +161,5 @@ cython_debug/
 #custom_components/bms_ble/plugins/dummy_bms.py
 TODO.md
 
+# macOS
+.DS_Store

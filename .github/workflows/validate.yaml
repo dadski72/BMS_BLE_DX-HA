@@ -3,22 +3,19 @@ name: Validate with HACS
 permissions:
   contents: read
 
-concurrency:  # Ensures only one workflow per PR/branch is active
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
 on:
   push:
-  pull_request:
+    branches:
+      - main
   workflow_dispatch:
   schedule:
-    - cron:  '0 5 * * 6'  
+    - cron:  '0 5 * * 6'
 
 jobs:
   validate-hacs:
     runs-on: "ubuntu-latest"
     steps:
-        - uses: "actions/checkout@v4"
+        - uses: "actions/checkout@v6"
         - name: HACS validation
           uses: "hacs/action@main"
           with:
