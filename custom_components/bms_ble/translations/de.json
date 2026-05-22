@@ -2,7 +2,7 @@
   "config": {
     "abort": {
       "already_configured": "Gerät ist bereits konfiguriert.",
-      "no_devices_found": "Keine unterstützen Geräte via Bluetooth gefunden.",
+      "no_devices_found": "Keine unterstützten Geräte via Bluetooth gefunden.",
       "not_supported": "Gerät wird nicht unterstützt."
     },
     "flow_title": "Setup {name} ({id}) als {model}",
@@ -18,37 +18,91 @@
       }
     }
   },
+  "entity": {
+    "binary_sensor": {
+      "balancer": {
+        "name": "Balancer"
+      },
+      "chrg_mosfet": {
+        "name": "Lade-MOSFET"
+      },
+      "dischrg_mosfet": {
+        "name": "Entlade-MOSFET"
+      },
+      "heater": {
+        "name": "Heizung"
+      }
+    },
+    "sensor": {
+      "battery_health": {
+        "name": "Gesundheitszustand"
+      },
+      "cycles": {
+        "name": "Zyklen"
+      },
+      "delta_cell_voltage": {
+        "name": "Delta Zellspannung"
+      },
+      "link_quality": {
+        "name": "Verbindungsqualität"
+      },
+      "max_cell_voltage": {
+        "name": "Höchste Zellspannung"
+      },
+      "min_cell_voltage": {
+        "name": "Niedrigste Zellspannung"
+      },
+      "runtime": {
+        "name": "Laufzeit"
+      }
+    }
+  },
   "exceptions": {
+    "bms_com_fail": {
+      "message": "BMS Kommunikation fehlgeschlagen: {err_msg}, Signalstärke {rssi} dBm."
+    },
+    "bms_com_fail_rssi": {
+      "message": "BMS Kommunikation fehlgeschlagen: {err_msg}. Bitte Signalstärke ({rssi} dBm) verbessern!"
+    },
+    "bms_no_valid_data": {
+      "message": "Das BMS hat keine gültigen Daten gesendet."
+    },
+    "bms_timeout": {
+      "message": "Zeitüberschreitung bei BMS Kommunikation."
+    },
     "device_not_found": {
-      "message": "BMS ({MAC}) wurde nicht via Bluetooth gefunden."
+      "message": "BMS ({mac}) wurde nicht via Bluetooth gefunden."
     },
     "missing_unique_id": {
       "message": "Eindeutige ID für Gerät fehlt."
     }
   },
-  "entity": {
-    "binary_sensor": {
-      "battery_discharging_state": {
-        "name": "Batterie entlädt"
-      }
+  "options": {
+    "abort": {
+      "device_has_no_options": "Dieses Gerät unterstützt keine Konfigurationsoptionen.",
+      "not_supported": "Nicht unterstützte Gerätekonfiguration."
     },
-    "sensor": {
-      "cycles": {
-        "name": "Zyklen"
-      },
-      "delta_voltage": {
-        "name": "Differenzspannung"
-      },
-      "link_quality": {
-        "name": "Verbindungsqualität"
-      },
-      "runtime": {
-        "name": "Laufzeit"
-      }
-    },
-    "switch": {
-      "discharge_control": {
-        "name": "Entladekontrolle"
+    "step": {
+      "init": {
+        "data": {
+          "password": "Gerätepasswort"
+        },
+        "data_description": {
+          "password": "Optionales Passwort zum Entsperren des Geräts."
+        },
+        "sections": {
+          "advanced_options": {
+            "data": {
+              "keep_alive": "Verbindung zwischen Updates aufrechterhalten"
+            },
+            "data_description": {
+               "keep_alive": "Hält die Bluetooth-Verbindung zwischen den Update-Zyklen. Das Deaktivieren verschlechtert die Verbindungszuverlässigkeit des BMS und wird nur als letztes Mittel empfohlen, wenn ein Bluetooth-Adapter mit nur einer Verbindung (z. B. Realtek RTL8761B) mit anderen Integrationen geteilt wird. Verwende nach Möglichkeit einen dedizierten Bluetooth-Adapter."
+            },
+            "name": "Erweiterte Optionen"
+          }
+        },
+        "title": "Verbindungsoptionen",
+        "description": "Die Passwortoption ist nur verfügbar, wenn vom Gerät unterstützt."
       }
     }
   }

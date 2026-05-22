@@ -3,5 +3,7 @@
     "python.testing.pytestEnabled": true,
     "python.testing.pytestArgs": [
         "--cov=bms_ble",
-    ]
+    ],
+    "todo-tree.tree.showBadges": true,
+    "python.envFile": "${workspaceFolder}/.envFile"
 }
