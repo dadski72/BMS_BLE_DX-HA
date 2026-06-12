@@ -139,5 +139,5 @@
   "loggers": ["bleak_retry_connector", "aiobmsble"],
   "quality_scale": "silver",
   "requirements": ["aiobmsble==0.23.0"],
-  "version": "2.13.1"
+  "version": "2.13.2"
 }
