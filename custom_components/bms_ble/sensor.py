@@ -279,6 +279,18 @@ class BMSSensor(CoordinatorEntity[BTBmsCoordinator], SensorEntity):
         super().__init__(bms)
 
     @property
+    def available(self) -> bool:
+        """Stay available while a previous sample exists, retaining its value.
+
+        The BMS regularly drops off Bluetooth. Instead of going "unavailable"
+        (and discarding the last voltage/SoC/current/... reading), keep
+        reporting the last successfully received sample. Use the BMS
+        "Connection" binary sensor to detect when the live link is actually
+        down.
+        """
+        return self.coordinator.data is not None
+
+    @property
     def extra_state_attributes(self) -> dict[str, list[int | float]] | None:
         """Return entity specific state attributes, e.g. cell voltages."""
         if self.coordinator.data and self.entity_description.attr_fn:

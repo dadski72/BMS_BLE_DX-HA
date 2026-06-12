@@ -112,9 +112,11 @@ async def test_bluetooth_discovery(
         (
             "min",
             (
-                min(BINARY_SENSORS, 1),
+                # data-driven binary sensors present in the minimal payload, plus
+                # the always-present "connection" binary sensor
+                min(BINARY_SENSORS - 1, 1) + 1,
                 SENSORS - 3,
-                min(BINARY_SENSORS, 1) + (SENSORS - 1) + LINK_SENSORS,
+                min(BINARY_SENSORS - 1, 1) + 1 + (SENSORS - 1) + LINK_SENSORS,
             ),
         ),
         (

@@ -29,6 +29,9 @@
       "chrg_mosfet": {
         "name": "Charge MOSFET"
       },
+      "connection": {
+        "name": "Connection"
+      },
       "dischrg_mosfet": {
         "name": "Discharge MOSFET"
       },

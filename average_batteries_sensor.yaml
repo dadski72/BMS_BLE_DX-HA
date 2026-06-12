@@ -1,8 +1,22 @@
 # Battery Template Sensors for Home Assistant
 # This file contains template sensors for battery monitoring and management
+#
+# NOTE: These sensors are TRIGGER-BASED. They iterate over `states.sensor`,
+# which—on a normal (state-based) template sensor—subscribes the sensor to the
+# entire `sensor` domain. That makes the sensor re-render on every sensor change,
+# including its own state change, producing the Home Assistant warning:
+#   "Template loop detected ... skipping template render"
+# Using a trigger (HA start + a periodic time_pattern) renders the templates only
+# when the trigger fires, so there is no domain subscription and no self-trigger
+# loop. Adjust the time_pattern interval below if you need faster/slower updates.
 
 template:
-  - sensor:
+  - trigger:
+      - platform: homeassistant
+        event: start
+      - platform: time_pattern
+        seconds: "/30"
+    sensor:
       - name: "Average Batteries SOC"
         unique_id: "dadski_battery_average_soc"
         state: >

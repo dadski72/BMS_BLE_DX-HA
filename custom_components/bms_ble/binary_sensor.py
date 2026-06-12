@@ -22,8 +22,10 @@ from .const import (
     ATTR_CELL_COUNT,
     ATTR_CELLS,
     ATTR_CHRG_MOSFET,
+    ATTR_CONNECTED,
     ATTR_DISCHRG_MOSFET,
     ATTR_HEATER,
+    ATTR_LQ,
     ATTR_PROBLEM,
     ATTR_PROBLEM_CODE,
     DOMAIN,
@@ -113,12 +115,13 @@ async def async_setup_entry(
     """Add sensors for passed config_entry in Home Assistant."""
 
     bms: BTBmsCoordinator = config_entry.runtime_data
+    mac: str = format_mac(config_entry.unique_id)
+    entities: list[BinarySensorEntity] = [BMSConnectionSensor(bms, mac)]
     for descr in BINARY_SENSOR_TYPES:
         if descr.key not in bms.data:
             continue
-        async_add_entities(
-            [BMSBinarySensor(bms, descr, format_mac(config_entry.unique_id))]
-        )
+        entities.append(BMSBinarySensor(bms, descr, mac))
+    async_add_entities(entities)
 
 
 class BMSBinarySensor(CoordinatorEntity[BTBmsCoordinator], BinarySensorEntity):
@@ -141,6 +144,16 @@ class BMSBinarySensor(CoordinatorEntity[BTBmsCoordinator], BinarySensorEntity):
         super().__init__(bms)
 
     @property
+    def available(self) -> bool:
+        """Stay available while a previous sample exists, retaining its value.
+
+        Matches the regular BMS sensors: keep the last known state through a
+        Bluetooth drop-out instead of going "unavailable". The "Connection"
+        binary sensor reports the actual link state.
+        """
+        return self.coordinator.data is not None
+
+    @property
     def is_on(self) -> bool | None:
         """Handle updated data from the coordinator."""
         return bool(self.coordinator.data.get(self.entity_description.key))
@@ -153,3 +166,37 @@ class BMSBinarySensor(CoordinatorEntity[BTBmsCoordinator], BinarySensorEntity):
             if (fn := self.entity_description.attr_fn)
             else None
         )
+
+
+class BMSConnectionSensor(CoordinatorEntity[BTBmsCoordinator], BinarySensorEntity):
+    """Reports whether the BMS Bluetooth link is currently up.
+
+    Unlike the data sensors, this entity is always available so that a dropped
+    connection is reported as "off" (disconnected) rather than "unavailable".
+    """
+
+    _attr_has_entity_name = True
+    _attr_device_class = BinarySensorDeviceClass.CONNECTIVITY
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def __init__(self, bms: BTBmsCoordinator, unique_id: str) -> None:
+        """Initialize the BMS connection sensor."""
+        self._attr_unique_id = f"{DOMAIN}-{unique_id}-{ATTR_CONNECTED}"
+        self._attr_device_info = bms.device_info
+        self._attr_translation_key = ATTR_CONNECTED
+        super().__init__(bms)
+
+    @property
+    def available(self) -> bool:
+        """Always available, so a down link is reported as 'off'."""
+        return True
+
+    @property
+    def is_on(self) -> bool:
+        """Return True while the BMS link is up (last update succeeded)."""
+        return self.coordinator.last_update_success
+
+    @property
+    def extra_state_attributes(self) -> dict[str, int]:
+        """Expose link quality (successful reads over the last 100 attempts)."""
+        return {ATTR_LQ: self.coordinator.link_quality}

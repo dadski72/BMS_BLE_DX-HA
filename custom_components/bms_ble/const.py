@@ -20,6 +20,7 @@ ATTR_CELL_COUNT: Final[str] = "cell_count"  # [#]
 ATTR_CELL_NUMBER: Final[str] = "cell_number"  # [#]
 ATTR_CELL_VOLTAGES: Final[str] = "cell_voltages"  # [V]
 ATTR_CHRG_MOSFET: Final[str] = "chrg_mosfet"  # [bool]
+ATTR_CONNECTED: Final[str] = "connection"  # [bool]
 ATTR_CURRENT: Final[str] = "current"  # [A]
 ATTR_CYCLE_CAP: Final[str] = "cycle_capacity"  # [Wh]
 ATTR_CYCLE_CHRG: Final[str] = "cycle_charge"  # [Ah]
@@ -37,6 +38,6 @@ ATTR_RSSI: Final[str] = "rssi"  # [dBm]
 ATTR_RUNTIME: Final[str] = "runtime"  # [s]
 ATTR_TEMP_SENSORS: Final[str] = "temperature_sensors"  # [°C]
 
-BINARY_SENSORS: Final[int] = 6  # total number of binary sensors
+BINARY_SENSORS: Final[int] = 7  # total number of binary sensors
 LINK_SENSORS: Final[int] = 2  # total number of sensors for connection quality
 SENSORS: Final[int] = 12  # total number of sensors
