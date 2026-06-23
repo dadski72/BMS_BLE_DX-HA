@@ -7,7 +7,7 @@ aiousbwatcher~=1.1.1
 bluetooth-adapters~=2.1.0
 pycares < 5.0.0
 pytest~=8.4.1
-pytest-socket~=0.7.0
+pytest-socket~=0.8.0
 sqlalchemy~=2.0.41
 freezegun~=1.5.2
 requests-mock~=1.12.1
